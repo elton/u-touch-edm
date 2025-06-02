@@ -1,0 +1,7 @@
+.vscode/
+pyproject.toml
+.python-version
+uv.lock
+.venv/
+*.xlsx
+.DS_Store
