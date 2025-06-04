@@ -1,0 +1,56 @@
+2025-06-02 18:21:29,584 - INFO - 开始发送测试邮件，共 1 个收件人
+2025-06-02 18:21:29,584 - INFO - 正在发送第 1/1 封测试邮件到: elton.zheng@u-touch.co.jp
+2025-06-02 18:21:33,445 - ERROR - 发送邮件失败 elton.zheng@u-touch.co.jp: (534, b'5.7.9 Application-specific password required. For more information, go to\n5.7.9  https://support.google.com/mail/?p=InvalidSecondFactor d2e1a72fcca58-747affd4594sm7308489b3a.152 - gsmtp')
+2025-06-02 18:21:33,446 - INFO - 测试邮件发送完成: 成功 0, 失败 1
+2025-06-04 09:26:21,582 - INFO - 开始发送测试邮件，共 1 个收件人
+2025-06-04 09:26:21,582 - INFO - 正在发送第 1/1 封测试邮件到: elton.zheng@u-touch.co.jp
+2025-06-04 09:26:25,732 - ERROR - 发送邮件失败 elton.zheng@u-touch.co.jp: (535, b'5.7.8 Username and Password not accepted. For more information, go to\n5.7.8  https://support.google.com/mail/?p=BadCredentials 98e67ed59e1d1-3124e2b544asm8650979a91.2 - gsmtp')
+2025-06-04 09:26:25,732 - INFO - 测试邮件发送完成: 成功 0, 失败 1
+2025-06-04 09:54:12,453 - INFO - 开始发送测试邮件，共 1 个收件人
+2025-06-04 09:54:12,454 - INFO - 正在发送第 1/1 封测试邮件到: elton.zheng@u-touch.co.jp
+2025-06-04 09:54:15,121 - INFO - 邮件成功发送到: elton.zheng@u-touch.co.jp (CVCTOKYO事业协同组合) - 跟踪ID: TEST_8bf42a46-0071-4c77-be5b-2435265f55af
+2025-06-04 09:54:15,123 - INFO - 测试邮件发送完成: 成功 1, 失败 0
+2025-06-04 09:56:47,662 - INFO - 开始发送测试邮件，共 1 个收件人
+2025-06-04 09:56:47,662 - INFO - 正在发送第 1/1 封测试邮件到: elton.zheng@u-touch.co.jp
+2025-06-04 09:56:50,513 - INFO - 邮件成功发送到: elton.zheng@u-touch.co.jp (CVCTOKYO事业协同组合) - 跟踪ID: TEST_ecf80744-fe20-42d6-805c-5a163648e47c
+2025-06-04 09:56:50,514 - INFO - 测试邮件发送完成: 成功 1, 失败 0
+2025-06-04 10:03:07,228 - INFO - 开始发送测试邮件，共 1 个收件人
+2025-06-04 10:03:07,228 - INFO - 正在发送第 1/1 封测试邮件到: elton.zheng@u-touch.co.jp
+2025-06-04 10:03:09,862 - INFO - 邮件成功发送到: elton.zheng@u-touch.co.jp (CVCTOKYO事业协同组合) - 跟踪ID: TEST_84ad369f-7d63-4380-9f53-d6dc8a350036
+2025-06-04 10:03:09,863 - INFO - 测试邮件发送完成: 成功 1, 失败 0
+2025-06-04 10:05:55,572 - INFO - 开始发送测试邮件，共 1 个收件人
+2025-06-04 10:05:55,572 - INFO - 正在发送第 1/1 封测试邮件到: elton.zheng@u-touch.co.jp
+2025-06-04 10:05:58,364 - INFO - 邮件成功发送到: elton.zheng@u-touch.co.jp (CVCTOKYO事业协同组合) - 跟踪ID: TEST_dc91e028-1d90-4b02-bcda-66e64ea320fa
+2025-06-04 10:05:58,366 - INFO - 测试邮件发送完成: 成功 1, 失败 0
+2025-06-04 10:09:23,668 - INFO - 开始发送测试邮件，共 2 个收件人
+2025-06-04 10:09:23,668 - INFO - 正在发送第 1/2 封测试邮件到: elton.zheng@u-touch.co.jp
+2025-06-04 10:09:26,297 - INFO - 邮件成功发送到: elton.zheng@u-touch.co.jp (CVCTOKYO事业协同组合) - 跟踪ID: TEST_2076241a-ba3a-4b7b-848c-e5a288965173
+2025-06-04 10:09:27,305 - INFO - 正在发送第 2/2 封测试邮件到: shirasawa.t@u-touch.co.jp
+2025-06-04 10:09:29,122 - INFO - 邮件成功发送到: shirasawa.t@u-touch.co.jp (CVCTOKYO事业协同组合) - 跟踪ID: TEST_9881db79-70b7-4218-8094-3a35c5c2a9ef
+2025-06-04 10:09:29,124 - INFO - 测试邮件发送完成: 成功 2, 失败 0
+2025-06-04 10:23:54,550 - INFO - 开始发送测试邮件，共 2 个收件人
+2025-06-04 10:23:54,552 - INFO - 正在发送第 1/2 封测试邮件到: elton.zheng@u-touch.co.jp
+2025-06-04 10:23:57,305 - ERROR - 发送邮件失败 elton.zheng@u-touch.co.jp: (535, b'5.7.8 Username and Password not accepted. For more information, go to\n5.7.8  https://support.google.com/mail/?p=BadCredentials d9443c01a7336-2355c58ecd0sm61002705ad.25 - gsmtp')
+2025-06-04 10:23:58,308 - INFO - 正在发送第 2/2 封测试邮件到: shirasawa.t@u-touch.co.jp
+2025-06-04 10:24:01,802 - ERROR - 发送邮件失败 shirasawa.t@u-touch.co.jp: (535, b'5.7.8 Username and Password not accepted. For more information, go to\n5.7.8  https://support.google.com/mail/?p=BadCredentials d9443c01a7336-23506cfa37fsm93886195ad.197 - gsmtp')
+2025-06-04 10:24:01,803 - INFO - 测试邮件发送完成: 成功 0, 失败 2
+2025-06-04 10:24:06,204 - INFO - 开始发送测试邮件，共 2 个收件人
+2025-06-04 10:24:06,204 - INFO - 正在发送第 1/2 封测试邮件到: elton.zheng@u-touch.co.jp
+2025-06-04 10:24:24,040 - INFO - 邮件成功发送到: elton.zheng@u-touch.co.jp (CVCTOKYO事业协同组合) - 跟踪ID: TEST_f7e09e4a-2f86-4c89-b87f-e101a1f013da
+2025-06-04 10:24:25,047 - INFO - 正在发送第 2/2 封测试邮件到: shirasawa.t@u-touch.co.jp
+2025-06-04 10:24:43,433 - INFO - 邮件成功发送到: shirasawa.t@u-touch.co.jp (CVCTOKYO事业协同组合) - 跟踪ID: TEST_ae4464ae-6838-404f-853e-fc77778c51a1
+2025-06-04 10:24:43,433 - INFO - 测试邮件发送完成: 成功 2, 失败 0
+2025-06-04 10:25:29,247 - INFO - 开始发送测试邮件，共 2 个收件人
+2025-06-04 10:25:29,248 - INFO - 正在发送第 1/2 封测试邮件到: elton.zheng@u-touch.co.jp
+2025-06-04 10:25:32,573 - ERROR - 发送邮件失败 elton.zheng@u-touch.co.jp: (534, b'5.7.9 Application-specific password required. For more information, go to\n5.7.9  https://support.google.com/mail/?p=InvalidSecondFactor d9443c01a7336-23506bc8af9sm94345755ad.47 - gsmtp')
+2025-06-04 10:25:33,578 - INFO - 正在发送第 2/2 封测试邮件到: shirasawa.t@u-touch.co.jp
+2025-06-04 10:25:36,877 - ERROR - 发送邮件失败 shirasawa.t@u-touch.co.jp: (534, b'5.7.9 Application-specific password required. For more information, go to\n5.7.9  https://support.google.com/mail/?p=InvalidSecondFactor d9443c01a7336-23506cd34f9sm93809345ad.157 - gsmtp')
+2025-06-04 10:25:36,877 - INFO - 测试邮件发送完成: 成功 0, 失败 2
+2025-06-04 10:26:49,449 - INFO - 开始发送测试邮件，共 1 个收件人
+2025-06-04 10:26:49,449 - INFO - 正在发送第 1/1 封测试邮件到: elton.zheng@u-touch.co.jp
+2025-06-04 10:26:50,177 - ERROR - 发送邮件失败 elton.zheng@u-touch.co.jp: [SSL: WRONG_VERSION_NUMBER] wrong version number (_ssl.c:1016)
+2025-06-04 10:26:50,177 - INFO - 测试邮件发送完成: 成功 0, 失败 1
+2025-06-04 10:29:45,654 - INFO - 开始发送测试邮件，共 1 个收件人
+2025-06-04 10:29:45,654 - INFO - 正在发送第 1/1 封测试邮件到: elton.zheng@u-touch.co.jp
+2025-06-04 10:30:03,889 - INFO - 邮件成功发送到: elton.zheng@u-touch.co.jp (CVCTOKYO事业协同组合) - 跟踪ID: TEST_84d1131f-bb2a-4f72-aa3f-dc9072d029e0
+2025-06-04 10:30:03,891 - INFO - 测试邮件发送完成: 成功 1, 失败 0
