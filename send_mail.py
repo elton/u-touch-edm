@@ -27,7 +27,7 @@ class EmailSender:
         self,
         gmail_user: str,
         gmail_password: str,
-        gtm_tracking_id: Optional[str] = None,
+        ga_tracking_id: Optional[str] = None,
     ):
         """
         初始化邮件发送器
@@ -35,13 +35,13 @@ class EmailSender:
         Args:
             gmail_user: Gmail邮箱地址
             gmail_password: Gmail应用密码（不是账户密码）
-            gtm_tracking_id: Google Tag Manager跟踪ID (如: GTM-XXXXXXXXX)
+            ga_tracking_id: Google Analytics 4 跟踪ID (如: G-XXXXXXXXXX)
         """
         self.gmail_user = gmail_user
         self.gmail_password = gmail_password
         self.smtp_server = "smtp.gmail.com"
         self.smtp_port = 587
-        self.gtm_tracking_id = gtm_tracking_id
+        self.ga_tracking_id = ga_tracking_id
 
     def connect_to_database(self) -> pymysql.connections.Connection:
         """连接到MySQL数据库"""
@@ -102,52 +102,44 @@ class EmailSender:
         if not tracking_id:
             tracking_id = str(uuid.uuid4())
 
-        # Google Tag Manager跟踪代码
-        gtm_head_script = ""
-        gtm_body_script = ""
-        gtm_custom_event = ""
+        # Google Analytics跟踪代码
+        ga_head_script = ""
+        ga_body_script = ""
+        ga_custom_event = ""
 
-        if self.gtm_tracking_id:
-            # GTM Head 部分代码
-            gtm_head_script = f"""
-    <!-- Google Tag Manager -->
-    <script>(function(w,d,s,l,i){{w[l]=w[l]||[];w[l].push({{'gtm.start':
-    new Date().getTime(),event:'gtm.js'}});var f=d.getElementsByTagName(s)[0],
-    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    }})(window,document,'script','dataLayer','{self.gtm_tracking_id}');</script>
-    <!-- End Google Tag Manager -->"""
-
-            # GTM Body 部分代码（noscript）
-            gtm_body_script = f"""
-    <!-- Google Tag Manager (noscript) -->
-    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id={self.gtm_tracking_id}"
-    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-    <!-- End Google Tag Manager (noscript) -->"""
-
-            # 自定义事件推送到dataLayer
-            gtm_custom_event = f"""
+        if self.ga_tracking_id:
+            # GA头部脚本
+            ga_head_script = f"""
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={self.ga_tracking_id}"></script>
     <script>
-    // 确保dataLayer存在
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){{dataLayer.push(arguments);}}
+      gtag('js', new Date());
+
+      gtag('config', '{self.ga_tracking_id}');
+    </script>"""
+
+            # 自定义事件跟踪，使用GA4事件跟踪方式
+            ga_custom_event = f"""
+    <script>
+    // 确保ataLayer存在并添加gtag函数
     window.dataLayer = window.dataLayer || [];
+    function gtag(){{dataLayer.push(arguments);}}
     
-    // 页面加载时推送邮件打开事件
-    window.dataLayer.push({{
-        'event': 'email_open',
-        'email_organization': '{organization_name}',
-        'email_tracking_id': '{tracking_id}',
-        'email_representative': '{representative_name or ""}',
-        'email_category': 'edm',
-        'email_action': 'open'
+    // 跟踪邮件打开事件
+    gtag('event', 'email_open', {{
+      'email_organization': '{organization_name}',
+      'email_tracking_id': '{tracking_id}',
+      'email_representative': '{representative_name or ""}',
+      'email_category': 'edm'
     }});
     
-    // 如果需要，也可以推送页面浏览事件
-    window.dataLayer.push({{
-        'event': 'page_view',
-        'page_title': '特定技能支援機関向けITツールサービスのご案内',
-        'page_location': window.location.href,
-        'custom_parameter_1': '{organization_name}',
-        'custom_parameter_2': '{tracking_id}'
+    // 跟踪页面浏览
+    gtag('event', 'page_view', {{
+      'page_title': '特定技能支援機関向けITツールサービスのご案内',
+      'organization_name': '{organization_name}',
+      'tracking_id': '{tracking_id}'
     }});
     </script>"""
 
@@ -158,7 +150,7 @@ class EmailSender:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>特定技能支援機関向けITツールサービスのご案内</title>
-    {gtm_head_script}
+    {ga_head_script}
     <style>
         body {{
             font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
@@ -233,7 +225,7 @@ class EmailSender:
     </style>
 </head>
 <body>
-    {gtm_body_script}
+    {ga_body_script}
     
     <div class="email-container">
         <div class="header">
@@ -260,7 +252,7 @@ class EmailSender:
             <p style="text-align: center; margin: 30px 0;">
                 <a href="https://u-touch.co.jp/contact" 
                    class="cta-button"
-                   onclick="if(window.dataLayer) window.dataLayer.push({{'event': 'email_click', 'click_type': 'contact_button', 'organization': '{{organization_name}}', 'tracking_id': '{{tracking_id}}'}})">
+                   onclick="if(typeof gtag === 'function') gtag('event', 'click', {{'event_category': 'email', 'event_label': 'contact_button', 'organization': '{{organization_name}}', 'tracking_id': '{{tracking_id}}'}})">
                    お問い合わせはこちら
                 </a>
             </p>
@@ -274,7 +266,7 @@ class EmailSender:
             <div class="contact-info">
                 <a href="mailto:shirasawa.t@u-touch.co.jp" 
                    style="color: #0066cc;"
-                   onclick="if(window.dataLayer) window.dataLayer.push({{'event': 'email_click', 'click_type': 'email_link', 'organization': '{organization_name}', 'tracking_id': '{tracking_id}'}});">
+                   onclick="if(typeof gtag === 'function') gtag('event', 'click', {{'event_category': 'email', 'event_label': 'email_link', 'organization': '{organization_name}', 'tracking_id': '{tracking_id}'}});">
                    shirasawa.t@u-touch.co.jp
                 </a>
             </div>
@@ -286,7 +278,7 @@ class EmailSender:
         </div>
     </div>
     
-    {gtm_custom_event}
+    {ga_custom_event}
 </body>
 </html>
         """
@@ -491,7 +483,7 @@ def test_mode():
     # 配置参数
     GMAIL_USER = "info@uforward.jp"  # 替换为您的Gmail地址
     GMAIL_PASSWORD = "pwqltfgitutzdxro"  # 替换为您的Gmail应用密码
-    GTM_TRACKING_ID = "GTM-M4HR78M3"  # 替换为您的Google Tag Manager跟踪ID
+    GA_TRACKING_ID = "G-YT3RDQ5MGT"  # Google Analytics 4 跟踪ID
     ATTACHMENT_PATH = "./attachment.pdf"  # 测试时可以不添加附件
     DELAY_SECONDS = 1  # 测试时较短间隔
 
@@ -500,13 +492,13 @@ def test_mode():
         print("请先在脚本中配置Gmail用户名和应用密码！")
         return
 
-    # 检查GTM配置
-    if GTM_TRACKING_ID == "GTM-M4HR78M3":
-        print("注意：当前使用的是示例GTM跟踪ID，请替换为您实际的GTM ID")
+    # 检查GA配置
+    if GA_TRACKING_ID == "G-YT3RDQ5MGT":
+        print("注意：当前使用的是示例GA跟踪ID，请替换为您实际的GA ID")
 
     try:
         # 创建邮件发送器
-        sender = EmailSender(GMAIL_USER, GMAIL_PASSWORD, GTM_TRACKING_ID)
+        sender = EmailSender(GMAIL_USER, GMAIL_PASSWORD, GA_TRACKING_ID)
 
         # 发送测试邮件
         success_count, fail_count = sender.send_test_emails(
@@ -527,7 +519,7 @@ def main():
     # 配置参数
     GMAIL_USER = "info@uforward.jp"  # 替换为您的Gmail地址
     GMAIL_PASSWORD = "pwqltfgitutzdxro"  # 替换为您的Gmail应用密码
-    GTM_TRACKING_ID = "GTM-M4HR78M3"  # 替换为您的Google Tag Manager跟踪ID
+    GA_TRACKING_ID = "G-YT3RDQ5MGT"  # Google Analytics 4 跟踪ID
     ATTACHMENT_PATH = "./attachment.pdf"  # 如果有附件，请提供文件路径
     DELAY_SECONDS = 2  # 发送邮件间隔秒数
     MAX_EMAILS = None  # 限制发送邮件数量，None表示发送全部
@@ -539,13 +531,13 @@ def main():
         print("应用密码设置：https://support.google.com/accounts/answer/185833")
         return
 
-    # 检查GTM配置
-    if GTM_TRACKING_ID == "GTM-M4HR78M3":
-        print("注意：当前使用的是示例GTM跟踪ID，请替换为您实际的GTM ID")
+    # 检查GA配置
+    if GA_TRACKING_ID == "G-YT3RDQ5MGT":
+        print("注意：当前使用的是示例GA跟踪ID，请替换为您实际的GA ID")
 
     try:
         # 创建邮件发送器
-        sender = EmailSender(GMAIL_USER, GMAIL_PASSWORD, GTM_TRACKING_ID)
+        sender = EmailSender(GMAIL_USER, GMAIL_PASSWORD, GA_TRACKING_ID)
 
         # 发送邮件
         sender.send_bulk_emails(
