@@ -69,7 +69,8 @@ class EmailSender:
             query = """
             SELECT organization_name, representative_name, email 
             FROM support_organization_registry 
-            WHERE email IS NOT NULL AND email != '' AND email LIKE '%@%'
+            WHERE (prefecture = '東京都' OR prefecture = '神奈川県')
+            AND email IS NOT NULL AND email != '' AND email LIKE '%@%'
             ORDER BY id
             """
 
@@ -450,7 +451,7 @@ def get_test_recipients() -> List[Tuple[str, str, str]]:
         ("CVCTOKYO事业协同组合", "松島力哉", "elton.zheng@u-touch.co.jp"),
         # ("CVCTOKYO事业协同组合", "松島力哉", "yuancw@u-touch.co.jp"),
         # ("CVCTOKYO事业协同组合", "松島力哉", "xiaodi@u-touch.co.jp"),
-        # ("CVCTOKYO事业协同组合", "松島力哉", "shirasawa.t@u-touch.co.jp"),
+        ("CVCTOKYO事业协同组合", "松島力哉", "shirasawa.t@u-touch.co.jp"),
     ]
 
     print("=== 测试邮件收件人列表 ===")
