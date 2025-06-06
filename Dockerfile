@@ -26,8 +26,8 @@ ENV PYTHONUNBUFFERED=1 \
     DB_APP_USER=edm-db \
     DB_APP_PASSWORD=yQQPFaTDGXBFjJWW
 
-# 设置时区为日本时区
-RUN apt-get update && apt-get install -y tzdata && \
+# 安装 cron 和设置时区
+RUN apt-get update && apt-get install -y tzdata cron && \
     ln -fs /usr/share/zoneinfo/Asia/Tokyo /etc/localtime && \
     dpkg-reconfigure -f noninteractive tzdata && \
     apt-get clean && \
