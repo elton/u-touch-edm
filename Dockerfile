@@ -8,7 +8,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制应用程序代码
 COPY *.py /app/
-COPY templates/ /app/templates/
 
 # 复制邮件附件
 COPY attachment.pdf /app/
