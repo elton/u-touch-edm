@@ -1,0 +1,16 @@
+{
+  "2025-06-06": {
+    "total_sent": 1,
+    "success_count": 1,
+    "fail_count": 0,
+    "details": [
+      {
+        "email": "elton.zheng@u-touch.co.jp",
+        "success": true,
+        "organization_name": "CVCTOKYO事业协同组合",
+        "representative_name": "松島力哉",
+        "timestamp": "2025-06-06 09:59:45"
+      }
+    ]
+  }
+}

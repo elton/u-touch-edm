@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import time
 from typing import List, Optional, Tuple
@@ -7,6 +8,7 @@ from urllib.parse import quote, urljoin
 import pymysql
 import requests
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 
 # 配置日志
 logging.basicConfig(
@@ -14,15 +16,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 加载环境变量，设置override=False，这样系统环境变量会优先于.env文件中的变量
+load_dotenv(override=False)
+
+# 判断当前环境
+ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
+logger.info(f"当前运行环境: {ENVIRONMENT}")
+
+# 如果是生产环境，输出一个提示
+if ENVIRONMENT == 'production':
+    logger.info("正在使用生产环境配置")
+else:
+    logger.info("正在使用开发环境配置")
+
 
 class SupportOrganizationScraper:
     def __init__(self):
-        # 数据库连接配置
+        # 数据库连接配置 - 从环境变量获取
         self.db_config = {
-            "host": "localhost",
-            "user": "edm_app_user",
-            "password": "EdmApp2024!@#",
-            "database": "edm",
+            "host": os.getenv('DB_HOST', 'localhost'),
+            "user": os.getenv('DB_APP_USER', 'edm_app_user'),
+            "password": os.getenv('DB_APP_PASSWORD', 'EdmApp2024!@#'),
+            "database": os.getenv('DB_NAME', 'edm'),
             "charset": "utf8mb4",
         }
 
@@ -48,6 +63,7 @@ class SupportOrganizationScraper:
         """获取数据库连接"""
         try:
             connection = pymysql.connect(**self.db_config)
+            logger.info(f"成功连接到数据库 (环境: {ENVIRONMENT})")
             return connection
         except pymysql.Error as err:
             logger.error(f"数据库连接错误: {err}")
@@ -287,12 +303,23 @@ class SupportOrganizationScraper:
 
 def main():
     """主函数"""
+    print("=" * 50)
+    print(f"           爬虫程序 (环境: {ENVIRONMENT})")
+    print("=" * 50)
+    
     scraper = SupportOrganizationScraper()
 
-    # 注意：请在运行前修改数据库名称
-    print("请确保已经正确配置了数据库名称！")
-    print("当前配置的数据库名为: your_database_name")
-    print("请在代码中修改为实际的数据库名称")
+    # 显示当前数据库配置
+    print("当前数据库配置:")
+    print(f"- 主机: {os.getenv('DB_HOST', 'localhost')}")
+    print(f"- 数据库: {os.getenv('DB_NAME', 'edm')}")
+    print(f"- 用户: {os.getenv('DB_APP_USER', 'edm_app_user')}")
+    
+    # 确认是否继续
+    response = input("是否开始处理? (y/N): ").strip().lower()
+    if response != "y":
+        print("操作取消")
+        return
 
     # 开始处理
     scraper.process_organizations()

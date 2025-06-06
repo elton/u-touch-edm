@@ -1,0 +1,30 @@
+version: '3'
+
+services:
+  u-touch-edm:
+    build: .
+    container_name: u-touch-edm
+    restart: always
+    environment:
+      - ENVIRONMENT=production
+      - DB_HOST=1Panel-mysql-UHRJ
+      - DB_PORT=3306
+      - DB_NAME=edm
+      - DB_READONLY_USER=edm-db
+      - DB_READONLY_PASSWORD=yQQPFaTDGXBFjJWW
+      - DB_APP_USER=edm-db
+      - DB_APP_PASSWORD=yQQPFaTDGXBFjJWW
+      - GMAIL_USER=info@uforward.jp
+      - GMAIL_PASSWORD=${GMAIL_PASSWORD}
+      - GA_TRACKING_ID=UA-172341524-1
+      - TZ=Asia/Tokyo
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - 1panel-network
+
+networks:
+  1panel-network:
+    external: true
+    name: 1panel-network

@@ -1,0 +1,25 @@
+# U-Touch EDM 邮件系统的 Crontab 配置
+# 复制此文件内容到服务器的 crontab 中
+# 使用命令: crontab -e
+
+# 环境变量设置
+ENVIRONMENT=production
+DB_HOST=1Panel-mysql-UHRJ
+DB_PORT=3306
+DB_NAME=edm
+DB_USER=edm-db
+DB_PASSWORD=yQQPFaTDGXBFjJWW
+# 在生产环境中使用同一个数据库账号
+DB_READONLY_USER=edm-db
+DB_READONLY_PASSWORD=yQQPFaTDGXBFjJWW
+DB_APP_USER=edm-db
+DB_APP_PASSWORD=yQQPFaTDGXBFjJWW
+GMAIL_USER=info@uforward.jp
+GMAIL_PASSWORD=your_app_password
+GA_TRACKING_ID=UA-172341524-1
+
+# 每天凌晨1点运行定时发送任务，发送50封邮件，均匀分布在24小时内
+0 1 * * * cd /path/to/u-touch-edm && ./daily_send_cron.sh >> /path/to/u-touch-edm/cron_send.log 2>&1
+
+# 每天早上日本时间9点发送前一天的邮件发送简报
+0 9 * * * cd /path/to/u-touch-edm && ./daily_report_cron.sh >> /path/to/u-touch-edm/cron_report.log 2>&1

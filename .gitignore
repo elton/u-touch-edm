@@ -4,3 +4,5 @@ uv.lock
 .venv/
 *.xlsx
 .DS_Store
+*.log
+__pycache__
