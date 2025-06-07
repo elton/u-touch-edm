@@ -24,10 +24,10 @@ GMAIL_PASSWORD=${GMAIL_PASSWORD}
 GA_TRACKING_ID=${GA_TRACKING_ID}
 
 # 每天凌晨1点运行定时发送任务，发送50封邮件，均匀分布在24小时内
-0 1 * * * root cd /app && /usr/local/bin/python send_mail.py --mode scheduled --daily-limit 50 >> /app/logs/cron_send.log 2>&1
+0 1 * * * root cd /app && ENVIRONMENT=production /usr/local/bin/python send_mail.py --mode scheduled --daily-limit 50 >> /app/logs/cron_send.log 2>&1
 
 # 每天早上日本时间9点发送前一天的邮件发送简报
-0 9 * * * root cd /app && /usr/local/bin/python send_mail.py --mode report >> /app/logs/cron_report.log 2>&1
+0 9 * * * root cd /app && ENVIRONMENT=production /usr/local/bin/python send_mail.py --mode report >> /app/logs/cron_report.log 2>&1
 EOF
 
 # 设置 cron 任务权限
