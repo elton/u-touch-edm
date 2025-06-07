@@ -108,8 +108,12 @@ class EmailSender:
             logging.error(f"查询数据库失败: {e}")
             raise
         finally:
-            if connection and connection.is_connected():
-                cursor.close()
+            if connection:
+                try:
+                    cursor.close()
+                except (AttributeError, pymysql.Error):
+                    # This handles cases where cursor might not be defined or other database errors
+                    pass
                 connection.close()
                 logging.info("数据库连接已关闭")
 
