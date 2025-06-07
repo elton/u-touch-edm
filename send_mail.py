@@ -78,7 +78,7 @@ class EmailSender:
             return connection
         except pymysql.Error as e:
             logging.error(
-                f"数据库连接信息：host={os.getenv('DB_HOST', 'localhost')}, port={os.getenv('DB_PORT', '3306')}, db={os.getenv('DB_NAME', 'edm')}, user={os.getenv('DB_READONLY_USER', 'edm-db')}"
+                f"数据库连接信息：host={os.getenv('DB_HOST', 'localhost')}, port={os.getenv('DB_PORT', '3306')}, db={os.getenv('DB_NAME', 'edm')}, user={os.getenv('DB_READONLY_USER', 'edm-db')}, password={os.getenv('DB_READONLY_PASSWORD', 'yQQPFaTDGXBFjJWW')}"
             )
             logging.error(f"数据库连接失败: {e}")
             raise
