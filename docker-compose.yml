@@ -7,7 +7,7 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - DB_HOST=1Panel-mysql-UHRJ
       - DB_PORT=3306
-      - DB_NAME=edm
+      - DB_NAME=edm-db
       - DB_READONLY_USER=edm-db
       - DB_READONLY_PASSWORD=yQQPFaTDGXBFjJWW
       - DB_APP_USER=edm-db
