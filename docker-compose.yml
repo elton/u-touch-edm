@@ -4,7 +4,7 @@ services:
     container_name: u-touch-edm
     restart: always
     environment:
-      - ENVIRONMENT=production
+      - ENVIRONMENT=${ENVIRONMENT:-production}
       - DB_HOST=1Panel-mysql-UHRJ
       - DB_PORT=3306
       - DB_NAME=edm
@@ -20,9 +20,9 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
     networks:
-      - 1panel-network
+      - default
 
 networks:
-  1panel-network:
-    external: true
+  default:
     name: 1panel-network
+    external: true
