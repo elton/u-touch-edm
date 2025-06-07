@@ -59,7 +59,7 @@ class EmailSender:
         self.smtp_server = "smtp.gmail.com"
         self.smtp_port = 587
         self.ga_tracking_id = ga_tracking_id
-        
+
         # 邮件发送历史记录文件
         self.history_file = "email_send_history.json"
 
@@ -77,6 +77,9 @@ class EmailSender:
             logging.info(f"成功连接到数据库 (环境: {ENVIRONMENT})")
             return connection
         except pymysql.Error as e:
+            logging.error(
+                f"数据库连接信息：host={os.getenv('DB_HOST', 'localhost')}, port={os.getenv('DB_PORT', '3306')}, db={os.getenv('DB_NAME', 'edm')}, user={os.getenv('DB_READONLY_USER', 'edm-db')}"
+            )
             logging.error(f"数据库连接失败: {e}")
             raise
 
@@ -359,25 +362,33 @@ class EmailSender:
             logging.info(
                 f"邮件成功发送到: {to_email} ({organization_name}) - 跟踪ID: {tracking_id}"
             )
-            
+
             # 记录发送成功的邮件
-            self.record_email_send(to_email, True, organization_name, representative_name)
-            
+            self.record_email_send(
+                to_email, True, organization_name, representative_name
+            )
+
             return True
 
         except Exception as e:
-            logging.error(
-                f"发送邮件到 {to_email} ({organization_name}) 失败: {e}"
-            )
-            
+            logging.error(f"发送邮件到 {to_email} ({organization_name}) 失败: {e}")
+
             # 记录发送失败的邮件
-            self.record_email_send(to_email, False, organization_name, representative_name)
-            
+            self.record_email_send(
+                to_email, False, organization_name, representative_name
+            )
+
             return False
 
-    def record_email_send(self, email: str, success: bool, organization_name: str = "", representative_name: str = ""):
+    def record_email_send(
+        self,
+        email: str,
+        success: bool,
+        organization_name: str = "",
+        representative_name: str = "",
+    ):
         """记录邮件发送历史
-        
+
         Args:
             email: 收件人邮箱
             success: 是否发送成功
@@ -387,46 +398,48 @@ class EmailSender:
         try:
             # 获取当前日期作为记录键
             today = datetime.datetime.now().strftime("%Y-%m-%d")
-            
+
             # 读取现有历史记录
             try:
                 with open(self.history_file, "r", encoding="utf-8") as f:
                     history = json.load(f)
             except (FileNotFoundError, json.JSONDecodeError):
                 history = {}
-            
+
             # 初始化当天的记录
             if today not in history:
                 history[today] = {
                     "total_sent": 0,
                     "success_count": 0,
                     "fail_count": 0,
-                    "details": []
+                    "details": [],
                 }
-            
+
             # 更新统计数据
             history[today]["total_sent"] += 1
             if success:
                 history[today]["success_count"] += 1
             else:
                 history[today]["fail_count"] += 1
-            
+
             # 添加详细记录
-            history[today]["details"].append({
-                "email": email,
-                "success": success,
-                "organization_name": organization_name,
-                "representative_name": representative_name,
-                "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            })
-            
+            history[today]["details"].append(
+                {
+                    "email": email,
+                    "success": success,
+                    "organization_name": organization_name,
+                    "representative_name": representative_name,
+                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                }
+            )
+
             # 保存更新后的历史记录
             with open(self.history_file, "w", encoding="utf-8") as f:
                 json.dump(history, f, ensure_ascii=False, indent=2)
-                
+
         except Exception as e:
             logging.error(f"记录邮件发送历史失败: {e}")
-    
+
     def send_bulk_emails(
         self,
         attachment_path: Optional[str] = None,
@@ -435,7 +448,7 @@ class EmailSender:
         distribute_over_hours: Optional[float] = None,
     ) -> Tuple[int, int]:
         """批量发送邮件
-        
+
         Args:
             attachment_path: 附件路径
             delay_seconds: 发送间隔秒数
@@ -454,7 +467,7 @@ class EmailSender:
 
         total_recipients = len(recipients)
         logging.info(f"开始发送邮件，共 {total_recipients} 个收件人")
-        
+
         # 如果需要在指定时间内分布发送，计算每封邮件的间隔时间
         if distribute_over_hours is not None and distribute_over_hours > 0:
             # 计算总秒数并均分
@@ -462,7 +475,9 @@ class EmailSender:
             if total_recipients > 1:
                 # 间隔时间 = 总时间 / (邮件数量 - 1)
                 delay_seconds = total_seconds / (total_recipients - 1)
-            logging.info(f"邮件将在 {distribute_over_hours} 小时内发送完毕，每封邮件间隔 {delay_seconds:.2f} 秒")
+            logging.info(
+                f"邮件将在 {distribute_over_hours} 小时内发送完毕，每封邮件间隔 {delay_seconds:.2f} 秒"
+            )
 
         success_count = 0
         fail_count = 0
@@ -486,8 +501,12 @@ class EmailSender:
 
                 # 添加延迟，避免被邮件服务器标记为垃圾邮件
                 if i < total_recipients:
-                    next_time = datetime.datetime.now() + datetime.timedelta(seconds=delay_seconds)
-                    logging.info(f"等待 {delay_seconds:.2f} 秒后发送下一封邮件... 预计发送时间: {next_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                    next_time = datetime.datetime.now() + datetime.timedelta(
+                        seconds=delay_seconds
+                    )
+                    logging.info(
+                        f"等待 {delay_seconds:.2f} 秒后发送下一封邮件... 预计发送时间: {next_time.strftime('%Y-%m-%d %H:%M:%S')}"
+                    )
                     time.sleep(delay_seconds)
 
             except Exception as e:
@@ -621,32 +640,32 @@ def scheduled_mode(daily_limit: int = 50):
     print(f"           定时发送模式 (环境: {ENVIRONMENT})")
     print(f"           每日发送数量: {daily_limit}")
     print("=" * 50)
-    
+
     # 从环境变量获取配置参数
     GMAIL_USER = os.getenv("GMAIL_USER", "info@uforward.jp")
     GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD", "pwqltfgitutzdxro")
     GA_TRACKING_ID = os.getenv("GA_TRACKING_ID", "G-YT3RDQ5MGT")
     ATTACHMENT_PATH = "./attachment.pdf"  # 如果有附件，请提供文件路径
-    
+
     # 检查Gmail配置
     if GMAIL_USER == "your_email@gmail.com" or GMAIL_PASSWORD == "your_app_password":
         logging.error("请先配置Gmail用户名和应用密码！")
         return
-    
+
     try:
         # 创建邮件发送器
         sender = EmailSender(GMAIL_USER, GMAIL_PASSWORD, GA_TRACKING_ID)
-        
+
         # 将邮件发送均匀分布在24小时内
         hours_to_distribute = 24.0
-        
+
         # 发送邮件
         sender.send_bulk_emails(
             attachment_path=ATTACHMENT_PATH,
             max_emails=daily_limit,
-            distribute_over_hours=hours_to_distribute
+            distribute_over_hours=hours_to_distribute,
         )
-        
+
     except Exception as e:
         logging.error(f"程序执行失败: {e}")
 
@@ -656,28 +675,28 @@ def send_daily_report():
     print("=" * 50)
     print(f"           日报发送模式 (环境: {ENVIRONMENT})")
     print("=" * 50)
-    
+
     # 从环境变量获取Gmail配置
     GMAIL_USER = os.getenv("GMAIL_USER", "info@uforward.jp")
     GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD", "pwqltfgitutzdxro")
-    
+
     # 检查Gmail配置
     if not GMAIL_USER or not GMAIL_PASSWORD:
         logging.error("请先配置Gmail用户名和应用密码！")
         return False
-    
+
     try:
         # 导入邮件报告模块
         from email_report import EmailReporter
-        
+
         reporter = EmailReporter()
         success = reporter.generate_and_send_report()
-        
+
         if success:
             logging.info("每日邮件发送报告已成功发送")
         else:
             logging.warning("每日邮件发送报告发送失败")
-            
+
         return success
     except Exception as e:
         logging.error(f"发送每日报告时出错: {e}")
@@ -688,10 +707,17 @@ def main():
     """主函数"""
     # 解析命令行参数
     parser = argparse.ArgumentParser(description="邮件发送程序")
-    parser.add_argument("--mode", choices=["normal", "test", "scheduled", "report"], default="normal", help="运行模式: normal=正常模式, test=测试模式, scheduled=定时发送模式, report=发送日报")
-    parser.add_argument("--daily-limit", type=int, default=50, help="定时发送模式下，每天发送的邮件数量")
+    parser.add_argument(
+        "--mode",
+        choices=["normal", "test", "scheduled", "report"],
+        default="normal",
+        help="运行模式: normal=正常模式, test=测试模式, scheduled=定时发送模式, report=发送日报",
+    )
+    parser.add_argument(
+        "--daily-limit", type=int, default=50, help="定时发送模式下，每天发送的邮件数量"
+    )
     args = parser.parse_args()
-    
+
     if args.mode == "test":
         test_mode()
     elif args.mode == "scheduled":
@@ -712,7 +738,10 @@ def main():
         MAX_EMAILS = None  # 限制发送邮件数量，None表示发送全部
 
         # 检查Gmail配置
-        if GMAIL_USER == "your_email@gmail.com" or GMAIL_PASSWORD == "your_app_password":
+        if (
+            GMAIL_USER == "your_email@gmail.com"
+            or GMAIL_PASSWORD == "your_app_password"
+        ):
             print("请先配置Gmail用户名和应用密码！")
             print("注意：需要使用Gmail应用密码，不是账户密码")
             print("应用密码设置：https://support.google.com/accounts/answer/185833")
