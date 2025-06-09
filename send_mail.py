@@ -83,25 +83,35 @@ class EmailSender:
             logging.error(f"数据库连接失败: {e}")
             raise
 
-    def fetch_recipients(self) -> List[Tuple[str, str, str]]:
-        """从数据库获取收件人信息"""
+    def fetch_recipients(self, prefecture: Optional[str] = None) -> List[Tuple[str, str, str, int]]:
+        """从数据库获取未发送邮件的收件人信息
+        
+        Args:
+            prefecture: 可选的都道府县筛选条件，如果不提供则使用默认的东京和神奈川
+        """
         connection = None
         try:
             connection = self.connect_to_database()
             cursor = connection.cursor()
 
-            query = """
-            SELECT organization_name, representative_name, email 
+            # 构建查询条件
+            prefecture_condition = "(prefecture = '東京都' OR prefecture = '神奈川県')"
+            if prefecture:
+                prefecture_condition = f"prefecture = '{prefecture}'"
+
+            query = f"""
+            SELECT organization_name, representative_name, email, id 
             FROM support_organization_registry 
-            WHERE (prefecture = '東京都' OR prefecture = '神奈川県')
+            WHERE {prefecture_condition}
             AND email IS NOT NULL AND email != '' AND email LIKE '%@%'
+            AND email_sent = FALSE
             ORDER BY id
             """
 
             cursor.execute(query)
             recipients = cursor.fetchall()
 
-            logging.info(f"从数据库获取到 {len(recipients)} 个收件人")
+            logging.info(f"从数据库获取到 {len(recipients)} 个未发送邮件的收件人")
             return recipients
 
         except pymysql.Error as e:
@@ -320,6 +330,7 @@ class EmailSender:
         to_email: str,
         organization_name: str,
         representative_name: str,
+        org_id: int,
         attachment_path: Optional[str] = None,
         tracking_id: Optional[str] = None,
     ) -> bool:
@@ -371,6 +382,9 @@ class EmailSender:
             self.record_email_send(
                 to_email, True, organization_name, representative_name
             )
+            
+            # 更新数据库中的邮件发送状态
+            self.update_email_sent_status(org_id)
 
             return True
 
@@ -444,8 +458,41 @@ class EmailSender:
         except Exception as e:
             logging.error(f"记录邮件发送历史失败: {e}")
 
+    def update_email_sent_status(self, org_id: int) -> bool:
+        """更新数据库中的邮件发送状态
+        
+        Args:
+            org_id: 机构ID
+        """
+        connection = None
+        try:
+            connection = self.connect_to_database()
+            cursor = connection.cursor()
+            
+            # 更新邮件发送状态
+            query = "UPDATE support_organization_registry SET email_sent = TRUE WHERE id = %s"
+            cursor.execute(query, (org_id,))
+            connection.commit()
+            
+            logging.info(f"已更新机构ID {org_id} 的邮件发送状态")
+            return True
+            
+        except pymysql.Error as e:
+            logging.error(f"更新邮件发送状态失败: {e}")
+            if connection:
+                connection.rollback()
+            return False
+        finally:
+            if connection:
+                try:
+                    cursor.close()
+                except (AttributeError, pymysql.Error):
+                    pass
+                connection.close()
+    
     def send_bulk_emails(
         self,
+        prefecture: Optional[str] = None,
         attachment_path: Optional[str] = None,
         delay_seconds: int = 2,
         max_emails: Optional[int] = None,
@@ -454,15 +501,16 @@ class EmailSender:
         """批量发送邮件
 
         Args:
+            prefecture: 可选的都道府县筛选条件
             attachment_path: 附件路径
             delay_seconds: 发送间隔秒数
             max_emails: 最大发送邮件数量
             distribute_over_hours: 将发送过程分布在多少小时内，如果设置，会覆盖delay_seconds
         """
         # 获取收件人列表
-        recipients = self.fetch_recipients()
+        recipients = self.fetch_recipients(prefecture)
         if not recipients:
-            logging.error("未获取到收件人信息")
+            logging.error("未获取到未发送邮件的收件人信息")
             return 0, 0
 
         # 如果设置了最大发送数量，则截取列表
@@ -486,7 +534,7 @@ class EmailSender:
         success_count = 0
         fail_count = 0
 
-        for i, (organization_name, representative_name, email) in enumerate(
+        for i, (organization_name, representative_name, email, org_id) in enumerate(
             recipients, 1
         ):
             try:
@@ -498,6 +546,7 @@ class EmailSender:
                     to_email=email,
                     organization_name=organization_name,
                     representative_name=representative_name,
+                    org_id=org_id,
                     attachment_path=attachment_path,
                 )
                 success_count += 1
@@ -546,12 +595,14 @@ class EmailSender:
             # 为测试邮件生成特殊的跟踪ID
             test_tracking_id = f"TEST_{uuid.uuid4()}"
 
+            # 测试邮件不更新数据库状态，使用一个虚拟的org_id
             success = self.send_email(
                 email,
                 organization_name,
                 representative_name,
-                attachment_path,
-                test_tracking_id,
+                org_id=-1,  # 测试邮件使用虚拟ID
+                attachment_path=attachment_path,
+                tracking_id=test_tracking_id,
             )
 
             if success:
@@ -638,8 +689,13 @@ def test_mode():
         print(f"测试失败: {e}")
 
 
-def scheduled_mode(daily_limit: int = 50):
-    """定时发送模式，将指定数量的邮件均匀分布在24小时内发送"""
+def scheduled_mode(daily_limit: int = 50, prefecture: Optional[str] = None):
+    """定时发送模式，将指定数量的邮件均匀分布在24小时内发送
+    
+    Args:
+        daily_limit: 每日发送邮件数量限制
+        prefecture: 可选的都道府县筛选条件
+    """
     print("=" * 50)
     print(f"           定时发送模式 (环境: {ENVIRONMENT})")
     print(f"           每日发送数量: {daily_limit}")
@@ -665,6 +721,7 @@ def scheduled_mode(daily_limit: int = 50):
 
         # 发送邮件
         sender.send_bulk_emails(
+            prefecture=prefecture,
             attachment_path=ATTACHMENT_PATH,
             max_emails=daily_limit,
             distribute_over_hours=hours_to_distribute,
@@ -720,12 +777,15 @@ def main():
     parser.add_argument(
         "--daily-limit", type=int, default=50, help="定时发送模式下，每天发送的邮件数量"
     )
+    parser.add_argument(
+        "--prefecture", type=str, help="指定要发送邮件的都道府县，例如'東京都'或'神奈川県'"
+    )
     args = parser.parse_args()
 
     if args.mode == "test":
         test_mode()
     elif args.mode == "scheduled":
-        scheduled_mode(daily_limit=args.daily_limit)
+        scheduled_mode(daily_limit=args.daily_limit, prefecture=args.prefecture)
     elif args.mode == "report":
         send_daily_report()
     else:
@@ -757,6 +817,7 @@ def main():
 
             # 发送邮件
             sender.send_bulk_emails(
+                prefecture=args.prefecture,
                 attachment_path=ATTACHMENT_PATH,
                 delay_seconds=DELAY_SECONDS,
                 max_emails=MAX_EMAILS,
