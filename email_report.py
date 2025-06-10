@@ -59,28 +59,60 @@ class EmailReporter:
             raise
 
     def get_yesterday_log_data(self) -> Dict:
-        """从日志文件中获取昨天的邮件发送记录"""
-        yesterday = datetime.datetime.now() - datetime.timedelta(days=1)
-        yesterday_date = yesterday.strftime("%Y-%m-%d")
+        """从数据库获取昨天的邮件发送记录"""
+        today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        yesterday_start = today - datetime.timedelta(days=1)
+        yesterday_end = today - datetime.timedelta(microseconds=1) # End of yesterday
         
-        # 读取发送记录文件
+        yesterday_date_str = yesterday_start.strftime("%Y-%m-%d")
+        
+        details = []
+        total_sent = 0
+        connection = None
+
         try:
-            with open("email_send_history.json", "r", encoding="utf-8") as f:
-                all_history = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            all_history = {}
-        
-        # 获取昨天的记录
-        yesterday_data = all_history.get(yesterday_date, {
-            "total_sent": 0,
-            "success_count": 0,
-            "fail_count": 0,
-            "details": []
-        })
-        
+            connection = self.connect_to_database()
+            cursor = connection.cursor(pymysql.cursors.DictCursor) # Use DictCursor for easier access
+            
+            query = """
+            SELECT email, organization_name, representative_name, prefecture, sent_at
+            FROM support_organization_registry
+            WHERE sent_at >= %s AND sent_at <= %s
+            ORDER BY sent_at DESC
+            """
+            
+            cursor.execute(query, (yesterday_start, yesterday_end))
+            results = cursor.fetchall()
+            
+            total_sent = len(results)
+            
+            for row in results:
+                details.append({
+                    "email": row["email"],
+                    "organization_name": row["organization_name"],
+                    "representative_name": row["representative_name"],
+                    "prefecture": row["prefecture"],
+                    "sent_time": row["sent_at"].strftime("%Y-%m-%d %H:%M:%S") if row["sent_at"] else "N/A",
+                    "status": "success" # Since we query by sent_at, it's always a success
+                })
+            
+            logging.info(f"从数据库获取到 {total_sent} 条昨天的发送记录 ({yesterday_date_str})")
+            
+        except pymysql.Error as e:
+            logging.error(f"从数据库获取邮件发送记录失败: {e}")
+        finally:
+            if connection:
+                cursor.close()
+                connection.close()
+                
         return {
-            "date": yesterday_date,
-            "data": yesterday_data
+            "date": yesterday_date_str,
+            "data": {
+                "total_sent": total_sent,
+                "success_count": total_sent, # All fetched records are successful sends
+                "fail_count": 0,
+                "details": details
+            }
         }
     
     def get_prefecture_stats(self, details: List[Dict]) -> Dict[str, int]:
@@ -385,56 +417,6 @@ class EmailReporter:
             logging.error(f"发送报告邮件失败: {e}")
             return False
     
-    def get_organization_details(self, email_list: List[Dict]) -> List[Dict]:
-        """从数据库获取机构详细信息"""
-        if not email_list:
-            return []
-            
-        try:
-            connection = self.connect_to_database()
-            cursor = connection.cursor()
-            
-            # 获取所有发送过邮件的组织的详细信息
-            email_addresses = [detail.get("email") for detail in email_list if "email" in detail]
-            if not email_addresses:
-                return []
-                
-            # 构建SQL查询
-            placeholders = ", ".join(["%s"] * len(email_addresses))
-            query = f"""
-            SELECT email, organization_name, representative_name, prefecture
-            FROM support_organization_registry
-            WHERE email IN ({placeholders})
-            """
-            
-            cursor.execute(query, email_addresses)
-            results = cursor.fetchall()
-            
-            # 创建邮箱到详细信息的映射
-            org_details = {}
-            for email, org_name, rep_name, prefecture in results:
-                org_details[email] = {
-                    "organization_name": org_name,
-                    "representative_name": rep_name,
-                    "prefecture": prefecture
-                }
-            
-            # 更新邮件列表中的组织详细信息
-            for detail in email_list:
-                email = detail.get("email")
-                if email and email in org_details:
-                    detail.update(org_details[email])
-            
-            return email_list
-            
-        except Exception as e:
-            logging.error(f"获取组织详细信息失败: {e}")
-            return email_list
-        finally:
-            if connection:
-                cursor.close()
-                connection.close()
-    
     def generate_and_send_report(self):
         """生成并发送昨天的邮件发送报告"""
         try:
@@ -445,11 +427,6 @@ class EmailReporter:
             if report_data["data"]["total_sent"] == 0:
                 logging.info(f"昨天 ({report_data['date']}) 没有邮件发送记录，不生成报告")
                 return False
-            
-            # 补充组织详细信息
-            details = report_data["data"]["details"]
-            details_with_info = self.get_organization_details(details)
-            report_data["data"]["details"] = details_with_info
             
             # 生成HTML报告
             html_content = self.generate_html_report(report_data)

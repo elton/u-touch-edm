@@ -104,7 +104,7 @@ class EmailSender:
             FROM support_organization_registry 
             WHERE {prefecture_condition}
             AND email IS NOT NULL AND email != '' AND email LIKE '%@%'
-            AND email_sent = FALSE
+            AND sent_at IS NULL
             ORDER BY id
             """
 
@@ -384,7 +384,7 @@ class EmailSender:
             )
             
             # 更新数据库中的邮件发送状态
-            self.update_email_sent_status(org_id)
+            self.update_email_sent_timestamp(org_id)
 
             return True
 
@@ -458,7 +458,7 @@ class EmailSender:
         except Exception as e:
             logging.error(f"记录邮件发送历史失败: {e}")
 
-    def update_email_sent_status(self, org_id: int) -> bool:
+    def update_email_sent_timestamp(self, org_id: int) -> bool:
         """更新数据库中的邮件发送状态
         
         Args:
@@ -470,15 +470,15 @@ class EmailSender:
             cursor = connection.cursor()
             
             # 更新邮件发送状态
-            query = "UPDATE support_organization_registry SET email_sent = TRUE WHERE id = %s"
+            query = "UPDATE support_organization_registry SET sent_at = CURRENT_TIMESTAMP WHERE id = %s"
             cursor.execute(query, (org_id,))
             connection.commit()
             
-            logging.info(f"已更新机构ID {org_id} 的邮件发送状态")
+            logging.info(f"邮件发送时间已更新 (org_id: {org_id})")
             return True
             
         except pymysql.Error as e:
-            logging.error(f"更新邮件发送状态失败: {e}")
+            logging.error(f"更新邮件发送时间失败 (org_id: {org_id}): {e}")
             if connection:
                 connection.rollback()
             return False

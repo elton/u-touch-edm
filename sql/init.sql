@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS `support_organization_registry` (
   `prefecture` VARCHAR(50) COMMENT '都道府县（检索用）',
   `phone_number` VARCHAR(30) COMMENT '电话号码',
   `representative_name` VARCHAR(80) COMMENT '代表者姓名',
-  `email_sent` BOOLEAN DEFAULT FALSE COMMENT '邮件是否已发送',
+  `sent_at` TIMESTAMP NULL DEFAULT NULL COMMENT '邮件发送时间',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   -- 添加索引以提高查询性能

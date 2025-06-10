@@ -1,5 +1,5 @@
 UPDATE support_organization_registry
-SET email_sent = TRUE
+SET sent_at = '2025-06-08 00:00:00'
 WHERE email IN (
     'info@officeadachi.com',
     'info@calico-legal.com',
