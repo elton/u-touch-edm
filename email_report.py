@@ -27,10 +27,11 @@ logging.basicConfig(
 # 简报收件人列表
 REPORT_RECIPIENTS = [
     "elton.zheng@u-touch.co.jp",
-    "yuancw@u-touch.co.jp", 
-    "xiaodi@u-touch.co.jp", 
-    "shirasawa.t@u-touch.co.jp"
+    # "yuancw@u-touch.co.jp",
+    # "xiaodi@u-touch.co.jp",
+    # "shirasawa.t@u-touch.co.jp"
 ]
+
 
 class EmailReporter:
     def __init__(self):
@@ -60,71 +61,93 @@ class EmailReporter:
 
     def get_yesterday_log_data(self) -> Dict:
         """从数据库获取昨天的邮件发送记录"""
-        today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = datetime.datetime.now().replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         yesterday_start = today - datetime.timedelta(days=1)
-        yesterday_end = today - datetime.timedelta(microseconds=1) # End of yesterday
-        
+        yesterday_end = today - datetime.timedelta(microseconds=1)  # End of yesterday
+
         yesterday_date_str = yesterday_start.strftime("%Y-%m-%d")
-        
+
         details = []
         total_sent = 0
+        success_count = 0
+        fail_count = 0
         connection = None
 
         try:
             connection = self.connect_to_database()
-            cursor = connection.cursor(pymysql.cursors.DictCursor) # Use DictCursor for easier access
-            
+            cursor = connection.cursor(
+                pymysql.cursors.DictCursor
+            )  # Use DictCursor for easier access
+
+            # 修改查询逻辑，获取昨天所有的发送记录（包括成功和失败的）
+            # 发送状态由sent_at字段是否为空来判断
             query = """
             SELECT email, organization_name, representative_name, prefecture, sent_at
             FROM support_organization_registry
             WHERE sent_at >= %s AND sent_at <= %s
             ORDER BY sent_at DESC
             """
-            
+
             cursor.execute(query, (yesterday_start, yesterday_end))
             results = cursor.fetchall()
-            
+
             total_sent = len(results)
-            
+
             for row in results:
-                details.append({
-                    "email": row["email"],
-                    "organization_name": row["organization_name"],
-                    "representative_name": row["representative_name"],
-                    "prefecture": row["prefecture"],
-                    "sent_time": row["sent_at"].strftime("%Y-%m-%d %H:%M:%S") if row["sent_at"] else "N/A",
-                    "status": "success" # Since we query by sent_at, it's always a success
-                })
-            
-            logging.info(f"从数据库获取到 {total_sent} 条昨天的发送记录 ({yesterday_date_str})")
-            
+                is_success = row["sent_at"] is not None
+                if is_success:
+                    success_count += 1
+                else:
+                    fail_count += 1
+
+                details.append(
+                    {
+                        "email": row["email"],
+                        "organization_name": row["organization_name"],
+                        "representative_name": row["representative_name"],
+                        "prefecture": row["prefecture"],
+                        "sent_time": (
+                            row["sent_at"].strftime("%Y-%m-%d %H:%M:%S")
+                            if row["sent_at"]
+                            else "N/A"
+                        ),
+                        "success": is_success,  # 根据sent_at是否为空判断成功或失败
+                    }
+                )
+
+            logging.info(
+                f"从数据库获取到 {total_sent} 条昨天的发送记录 ({yesterday_date_str})，成功: {success_count}，失败: {fail_count}"
+            )
+
         except pymysql.Error as e:
             logging.error(f"从数据库获取邮件发送记录失败: {e}")
         finally:
             if connection:
                 cursor.close()
                 connection.close()
-                
+
         return {
             "date": yesterday_date_str,
             "data": {
                 "total_sent": total_sent,
-                "success_count": total_sent, # All fetched records are successful sends
-                "fail_count": 0,
-                "details": details
-            }
+                "success_count": success_count,
+                "fail_count": fail_count,
+                "details": details,
+            },
         }
-    
+
     def get_prefecture_stats(self, details: List[Dict]) -> Dict[str, int]:
         """统计各地区的发送数量"""
         prefecture_stats = {}
-        
+
         for detail in details:
             prefecture = detail.get("prefecture", "未知")
             prefecture_stats[prefecture] = prefecture_stats.get(prefecture, 0) + 1
-        
+
         return prefecture_stats
-    
+
     def generate_html_report(self, report_data: Dict) -> str:
         """生成HTML格式的邮件发送报告"""
         date = report_data["date"]
@@ -133,13 +156,13 @@ class EmailReporter:
         success_count = data["success_count"]
         fail_count = data["fail_count"]
         details = data["details"]
-        
+
         # 计算成功率
         success_rate = 0 if total_sent == 0 else (success_count / total_sent) * 100
-        
+
         # 获取地区统计
         prefecture_stats = self.get_prefecture_stats(details)
-        
+
         # 生成HTML报告
         html = f"""
         <!DOCTYPE html>
@@ -313,7 +336,7 @@ class EmailReporter:
                     <div class="section">
                         <h2 class="section-title">地区分布</h2>
         """
-        
+
         # 添加地区统计图表
         if prefecture_stats:
             html += '<div class="chart">'
@@ -327,10 +350,10 @@ class EmailReporter:
                     <span class="chart-label">{prefecture}</span>
                 </div>
                 """
-            html += '</div>'
+            html += "</div>"
         else:
-            html += '<p>无地区数据</p>'
-            
+            html += "<p>无地区数据</p>"
+
         # 添加详细发送记录表格
         html += """
                     </div>
@@ -349,12 +372,13 @@ class EmailReporter:
                             </thead>
                             <tbody>
         """
-        
+
         # 最多显示50条记录
         for detail in details[:50]:
+            # 根据sent_at是否为空判断成功或失败
             status_color = "#28a745" if detail.get("success", False) else "#dc3545"
             status_text = "成功" if detail.get("success", False) else "失败"
-            
+
             html += f"""
                 <tr>
                     <td>{detail.get("organization_name", "")}</td>
@@ -364,7 +388,7 @@ class EmailReporter:
                     <td style="color: {status_color}; font-weight: bold;">{status_text}</td>
                 </tr>
             """
-            
+
         # 如果记录超过50条，显示省略提示
         if len(details) > 50:
             html += f"""
@@ -374,7 +398,7 @@ class EmailReporter:
                     </td>
                 </tr>
             """
-            
+
         html += """
                             </tbody>
                         </table>
@@ -388,10 +412,12 @@ class EmailReporter:
         </body>
         </html>
         """
-        
+
         return html
-    
-    def send_report_email(self, recipients: List[str], html_content: str, date: str) -> bool:
+
+    def send_report_email(
+        self, recipients: List[str], html_content: str, date: str
+    ) -> bool:
         """发送HTML格式的报告邮件"""
         try:
             # 创建邮件
@@ -399,41 +425,45 @@ class EmailReporter:
             msg["From"] = self.gmail_user
             msg["To"] = ", ".join(recipients)
             msg["Subject"] = f"【邮件发送日报】{date} - 发送统计"
-            
+
             # 添加HTML内容
             msg.attach(MIMEText(html_content, "html"))
-            
+
             # 连接到SMTP服务器并发送
             server = smtplib.SMTP(self.smtp_server, self.smtp_port)
             server.starttls()
             server.login(self.gmail_user, self.gmail_password)
             server.send_message(msg)
             server.quit()
-            
+
             logging.info(f"成功发送报告邮件到 {len(recipients)} 个收件人")
             return True
-            
+
         except Exception as e:
             logging.error(f"发送报告邮件失败: {e}")
             return False
-    
+
     def generate_and_send_report(self):
         """生成并发送昨天的邮件发送报告"""
         try:
             # 获取昨天的发送记录
             report_data = self.get_yesterday_log_data()
-            
+
             # 如果昨天没有发送记录，则不发送报告
             if report_data["data"]["total_sent"] == 0:
-                logging.info(f"昨天 ({report_data['date']}) 没有邮件发送记录，不生成报告")
+                logging.info(
+                    f"昨天 ({report_data['date']}) 没有邮件发送记录，不生成报告"
+                )
                 return False
-            
+
             # 生成HTML报告
             html_content = self.generate_html_report(report_data)
-            
+
             # 发送报告邮件
-            return self.send_report_email(REPORT_RECIPIENTS, html_content, report_data["date"])
-            
+            return self.send_report_email(
+                REPORT_RECIPIENTS, html_content, report_data["date"]
+            )
+
         except Exception as e:
             logging.error(f"生成和发送报告失败: {e}")
             return False
@@ -443,7 +473,7 @@ def main():
     """主函数"""
     reporter = EmailReporter()
     success = reporter.generate_and_send_report()
-    
+
     if success:
         print("报告邮件发送成功")
     else:
