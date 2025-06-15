@@ -1,12 +1,16 @@
+import base64
 import datetime
+import io
 import json
 import logging
 import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 import pymysql
 from dotenv import load_dotenv
 
@@ -23,6 +27,10 @@ logging.basicConfig(
         logging.StreamHandler(),
     ],
 )
+
+# 设置matplotlib中文字体
+plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans', 'Arial']
+plt.rcParams['axes.unicode_minus'] = False
 
 # 简报收件人列表
 REPORT_RECIPIENTS = [
@@ -148,6 +156,191 @@ class EmailReporter:
 
         return prefecture_stats
 
+    def get_weekly_stats(self) -> Tuple[Dict[str, int], Dict[str, Dict[str, int]]]:
+        """获取最近一周的发送统计数据"""
+        today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = today - datetime.timedelta(days=7)
+        
+        connection = None
+        prefecture_stats = {}
+        success_stats = {}
+        
+        try:
+            connection = self.connect_to_database()
+            cursor = connection.cursor(pymysql.cursors.DictCursor)
+            
+            # 获取最近一周的发送记录
+            query = """
+            SELECT prefecture, sent_at
+            FROM support_organization_registry
+            WHERE sent_at >= %s AND sent_at < %s
+            ORDER BY sent_at DESC
+            """
+            
+            cursor.execute(query, (week_start, today))
+            results = cursor.fetchall()
+            
+            for row in results:
+                prefecture = row["prefecture"] or "未知"
+                is_success = row["sent_at"] is not None
+                
+                # 统计地区分布
+                prefecture_stats[prefecture] = prefecture_stats.get(prefecture, 0) + 1
+                
+                # 统计成功率
+                if prefecture not in success_stats:
+                    success_stats[prefecture] = {"success": 0, "total": 0}
+                
+                success_stats[prefecture]["total"] += 1
+                if is_success:
+                    success_stats[prefecture]["success"] += 1
+                    
+        except pymysql.Error as e:
+            logging.error(f"获取一周统计数据失败: {e}")
+        finally:
+            if connection:
+                cursor.close()
+                connection.close()
+                
+        return prefecture_stats, success_stats
+    
+    def get_cumulative_stats(self) -> Tuple[Dict[str, int], Dict[str, Dict[str, int]]]:
+        """获取累计发送统计数据"""
+        connection = None
+        prefecture_stats = {}
+        success_stats = {}
+        
+        try:
+            connection = self.connect_to_database()
+            cursor = connection.cursor(pymysql.cursors.DictCursor)
+            
+            # 获取所有发送记录
+            query = """
+            SELECT prefecture, sent_at
+            FROM support_organization_registry
+            WHERE sent_at IS NOT NULL
+            ORDER BY sent_at DESC
+            """
+            
+            cursor.execute(query)
+            results = cursor.fetchall()
+            
+            for row in results:
+                prefecture = row["prefecture"] or "未知"
+                is_success = row["sent_at"] is not None
+                
+                # 统计地区分布
+                prefecture_stats[prefecture] = prefecture_stats.get(prefecture, 0) + 1
+                
+                # 统计成功率（已发送的都算成功）
+                if prefecture not in success_stats:
+                    success_stats[prefecture] = {"success": 0, "total": 0}
+                
+                success_stats[prefecture]["total"] += 1
+                success_stats[prefecture]["success"] += 1
+                    
+        except pymysql.Error as e:
+            logging.error(f"获取累计统计数据失败: {e}")
+        finally:
+            if connection:
+                cursor.close()
+                connection.close()
+                
+        return prefecture_stats, success_stats
+    
+    def create_chart(self, data: Dict[str, int], title: str, color: str = '#1f77b4') -> str:
+        """创建图表并返回base64编码的PNG图片"""
+        if not data:
+            return ""
+            
+        plt.figure(figsize=(10, 6))
+        
+        # 按数量排序并限制显示前10个
+        sorted_data = sorted(data.items(), key=lambda x: x[1], reverse=True)[:10]
+        
+        if not sorted_data:
+            return ""
+            
+        prefectures = [item[0] for item in sorted_data]
+        counts = [item[1] for item in sorted_data]
+        
+        bars = plt.bar(prefectures, counts, color=color, alpha=0.7)
+        
+        plt.title(title, fontsize=14, fontweight='bold')
+        plt.xlabel('地区', fontsize=12)
+        plt.ylabel('数量', fontsize=12)
+        plt.xticks(rotation=45, ha='right')
+        
+        # 在柱状图上方显示数值
+        for bar, count in zip(bars, counts):
+            plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1,
+                    str(count), ha='center', va='bottom', fontsize=10)
+        
+        plt.tight_layout()
+        
+        # 将图表保存为base64编码的PNG
+        buffer = io.BytesIO()
+        plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+        buffer.seek(0)
+        image_png = buffer.getvalue()
+        buffer.close()
+        plt.close()
+        
+        graphic = base64.b64encode(image_png)
+        graphic = graphic.decode('utf-8')
+        
+        return f"data:image/png;base64,{graphic}"
+    
+    def create_success_rate_chart(self, success_data: Dict[str, Dict[str, int]], title: str) -> str:
+        """创建成功率图表并返回base64编码的PNG图片"""
+        if not success_data:
+            return ""
+            
+        # 计算成功率
+        rate_data = {}
+        for prefecture, stats in success_data.items():
+            if stats["total"] > 0:
+                rate_data[prefecture] = (stats["success"] / stats["total"]) * 100
+        
+        if not rate_data:
+            return ""
+            
+        plt.figure(figsize=(10, 6))
+        
+        # 按成功率排序并限制显示前10个
+        sorted_data = sorted(rate_data.items(), key=lambda x: x[1], reverse=True)[:10]
+        
+        prefectures = [item[0] for item in sorted_data]
+        rates = [item[1] for item in sorted_data]
+        
+        bars = plt.bar(prefectures, rates, color='#28a745', alpha=0.7)
+        
+        plt.title(title, fontsize=14, fontweight='bold')
+        plt.xlabel('地区', fontsize=12)
+        plt.ylabel('成功率 (%)', fontsize=12)
+        plt.xticks(rotation=45, ha='right')
+        plt.ylim(0, 100)
+        
+        # 在柱状图上方显示数值
+        for bar, rate in zip(bars, rates):
+            plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1,
+                    f'{rate:.1f}%', ha='center', va='bottom', fontsize=10)
+        
+        plt.tight_layout()
+        
+        # 将图表保存为base64编码的PNG
+        buffer = io.BytesIO()
+        plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+        buffer.seek(0)
+        image_png = buffer.getvalue()
+        buffer.close()
+        plt.close()
+        
+        graphic = base64.b64encode(image_png)
+        graphic = graphic.decode('utf-8')
+        
+        return f"data:image/png;base64,{graphic}"
+
     def generate_html_report(self, report_data: Dict) -> str:
         """生成HTML格式的邮件发送报告"""
         date = report_data["date"]
@@ -162,6 +355,18 @@ class EmailReporter:
 
         # 获取地区统计
         prefecture_stats = self.get_prefecture_stats(details)
+        
+        # 获取一周统计数据
+        weekly_prefecture_stats, weekly_success_stats = self.get_weekly_stats()
+        
+        # 获取累计统计数据
+        cumulative_prefecture_stats, cumulative_success_stats = self.get_cumulative_stats()
+        
+        # 生成图表
+        weekly_region_chart = self.create_chart(weekly_prefecture_stats, "最近7天地区分布", '#1f77b4')
+        weekly_success_chart = self.create_success_rate_chart(weekly_success_stats, "最近7天成功率")
+        cumulative_region_chart = self.create_chart(cumulative_prefecture_stats, "累计地区分布", '#ff7f0e')
+        cumulative_success_chart = self.create_success_rate_chart(cumulative_success_stats, "累计成功率")
 
         # 生成HTML报告
         html = f"""
@@ -297,6 +502,25 @@ class EmailReporter:
                     font-size: 12px;
                     font-weight: bold;
                 }}
+                .chart-image {{
+                    width: 100%;
+                    max-width: 800px;
+                    height: auto;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                    margin: 20px 0;
+                }}
+                .chart-grid {{
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 30px;
+                    margin: 30px 0;
+                }}
+                @media (max-width: 768px) {{
+                    .chart-grid {{
+                        grid-template-columns: 1fr;
+                    }}
+                }}
                 .footer {{
                     text-align: center;
                     margin-top: 30px;
@@ -334,7 +558,7 @@ class EmailReporter:
                     </div>
                     
                     <div class="section">
-                        <h2 class="section-title">地区分布</h2>
+                        <h2 class="section-title">昨日地区分布</h2>
         """
 
         # 添加地区统计图表
@@ -354,12 +578,68 @@ class EmailReporter:
         else:
             html += "<p>无地区数据</p>"
 
-        # 添加详细发送记录表格
+        # 添加统计图表区域
         html += """
                     </div>
                     
                     <div class="section">
-                        <h2 class="section-title">发送详情</h2>
+                        <h2 class="section-title">最近7天统计</h2>
+                        <div class="chart-grid">
+                            <div>
+                                <h3 style="text-align: center; color: #0052cc; margin-bottom: 15px;">地区分布</h3>
+        """
+        
+        if weekly_region_chart:
+            html += f'<img src="{weekly_region_chart}" alt="最近7天地区分布" class="chart-image">'
+        else:
+            html += '<p style="text-align: center; color: #666;">无数据</p>'
+        
+        html += """
+                            </div>
+                            <div>
+                                <h3 style="text-align: center; color: #0052cc; margin-bottom: 15px;">成功率分布</h3>
+        """
+        
+        if weekly_success_chart:
+            html += f'<img src="{weekly_success_chart}" alt="最近7天成功率" class="chart-image">'
+        else:
+            html += '<p style="text-align: center; color: #666;">无数据</p>'
+        
+        html += """
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="section">
+                        <h2 class="section-title">累计统计</h2>
+                        <div class="chart-grid">
+                            <div>
+                                <h3 style="text-align: center; color: #0052cc; margin-bottom: 15px;">地区分布</h3>
+        """
+        
+        if cumulative_region_chart:
+            html += f'<img src="{cumulative_region_chart}" alt="累计地区分布" class="chart-image">'
+        else:
+            html += '<p style="text-align: center; color: #666;">无数据</p>'
+            
+        html += """
+                            </div>
+                            <div>
+                                <h3 style="text-align: center; color: #0052cc; margin-bottom: 15px;">成功率分布</h3>
+        """
+        
+        if cumulative_success_chart:
+            html += f'<img src="{cumulative_success_chart}" alt="累计成功率" class="chart-image">'
+        else:
+            html += '<p style="text-align: center; color: #666;">无数据</p>'
+        
+        html += """
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="section">
+                        <h2 class="section-title">昨日发送详情</h2>
                         <table>
                             <thead>
                                 <tr>
@@ -393,8 +673,8 @@ class EmailReporter:
         if len(details) > 50:
             html += f"""
                 <tr>
-                    <td colspan="5" style="text-align: center; font-style: italic;">
-                        ... 省略 {len(details) - 50} 条记录 ...
+                    <td colspan="5" style="text-align: center; font-style: italic; color: #666;">
+                        ... 省略 {len(details) - 50} 条记录，仅显示前50条 ...
                     </td>
                 </tr>
             """
@@ -405,7 +685,8 @@ class EmailReporter:
                     </div>
                     
                     <div class="footer">
-                        <p>此报告由系统自动生成，请勿回复此邮件。如有问题，请联系管理员。</p>
+                        <p>此报告由U-Touch EDM系统自动生成，请勿回复此邮件。</p>
+                        <p>如有问题，请联系管理员。生成时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
                     </div>
                 </div>
             </div>
@@ -424,7 +705,7 @@ class EmailReporter:
             msg = MIMEMultipart()
             msg["From"] = self.gmail_user
             msg["To"] = ", ".join(recipients)
-            msg["Subject"] = f"【邮件发送日报】{date} - 发送统计"
+            msg["Subject"] = f"【U-Touch EDM日报】{date} - 邮件发送统计及分析"
 
             # 添加HTML内容
             msg.attach(MIMEText(html_content, "html"))
