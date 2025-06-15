@@ -66,19 +66,23 @@ class EmailSender:
     def connect_to_database(self) -> pymysql.connections.Connection:
         """连接到MySQL数据库"""
         try:
+            db_password = os.getenv("DB_READONLY_PASSWORD")
+            if not db_password:
+                raise ValueError("DB_READONLY_PASSWORD environment variable is required")
+                
             connection = pymysql.connect(
                 host=os.getenv("DB_HOST", "localhost"),
                 port=int(os.getenv("DB_PORT", "3306")),
                 database=os.getenv("DB_NAME", "edm"),
                 user=os.getenv("DB_READONLY_USER", "edm-db"),
-                password=os.getenv("DB_READONLY_PASSWORD", "yQQPFaTDGXBFjJWW"),
+                password=db_password,
                 charset="utf8mb4",
             )
             logging.info(f"成功连接到数据库 (环境: {ENVIRONMENT})")
             return connection
         except pymysql.Error as e:
             logging.error(
-                f"数据库连接信息：host={os.getenv('DB_HOST', 'localhost')}, port={os.getenv('DB_PORT', '3306')}, db={os.getenv('DB_NAME', 'edm')}, user={os.getenv('DB_READONLY_USER', 'edm-db')}, password={os.getenv('DB_READONLY_PASSWORD', 'yQQPFaTDGXBFjJWW')}"
+                f"数据库连接信息：host={os.getenv('DB_HOST', 'localhost')}, port={os.getenv('DB_PORT', '3306')}, db={os.getenv('DB_NAME', 'edm')}, user={os.getenv('DB_READONLY_USER', 'edm-db')}"
             )
             logging.error(f"数据库连接失败: {e}")
             raise
@@ -661,12 +665,15 @@ def test_mode():
 
     # 从环境变量获取配置参数
     GMAIL_USER = os.getenv("GMAIL_USER", "info@uforward.jp")
-    GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD", "pwqltfgitutzdxro")
+    GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD")
     GA_TRACKING_ID = os.getenv("GA_TRACKING_ID", "G-YT3RDQ5MGT")
     ATTACHMENT_PATH = "./attachment.pdf"  # 测试时可以不添加附件
     DELAY_SECONDS = 1  # 测试时较短间隔
 
     # 检查Gmail配置
+    if not GMAIL_PASSWORD:
+        print("请先配置GMAIL_PASSWORD环境变量！")
+        return
     if GMAIL_USER == "your_email@gmail.com" or GMAIL_PASSWORD == "your_app_password":
         print("请先在脚本中配置Gmail用户名和应用密码！")
         return
@@ -703,11 +710,14 @@ def scheduled_mode(daily_limit: int = 50, prefecture: Optional[str] = None):
 
     # 从环境变量获取配置参数
     GMAIL_USER = os.getenv("GMAIL_USER", "info@uforward.jp")
-    GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD", "pwqltfgitutzdxro")
+    GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD")
     GA_TRACKING_ID = os.getenv("GA_TRACKING_ID", "G-YT3RDQ5MGT")
     ATTACHMENT_PATH = "./attachment.pdf"  # 如果有附件，请提供文件路径
 
     # 检查Gmail配置
+    if not GMAIL_PASSWORD:
+        logging.error("请先配置GMAIL_PASSWORD环境变量！")
+        return
     if GMAIL_USER == "your_email@gmail.com" or GMAIL_PASSWORD == "your_app_password":
         logging.error("请先配置Gmail用户名和应用密码！")
         return
@@ -743,7 +753,7 @@ def send_daily_report():
 
     # 检查Gmail配置
     if not GMAIL_USER or not GMAIL_PASSWORD:
-        logging.error("请先配置Gmail用户名和应用密码！")
+        logging.error("请先配置GMAIL_USER和GMAIL_PASSWORD环境变量！")
         return False
 
     try:
@@ -802,6 +812,11 @@ def main():
         MAX_EMAILS = None  # 限制发送邮件数量，None表示发送全部
 
         # 检查Gmail配置
+        if not GMAIL_PASSWORD:
+            print("请先配置GMAIL_PASSWORD环境变量！")
+            print("注意：需要使用Gmail应用密码，不是账户密码")
+            print("应用密码设置：https://support.google.com/accounts/answer/185833")
+            return
         if (
             GMAIL_USER == "your_email@gmail.com"
             or GMAIL_PASSWORD == "your_app_password"

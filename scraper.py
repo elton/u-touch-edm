@@ -33,10 +33,15 @@ else:
 class SupportOrganizationScraper:
     def __init__(self):
         # 数据库连接配置 - 从环境变量获取
+        # 验证必需的环境变量
+        db_password = os.getenv('DB_APP_PASSWORD')
+        if not db_password:
+            raise ValueError("DB_APP_PASSWORD environment variable is required")
+            
         self.db_config = {
             "host": os.getenv('DB_HOST', 'localhost'),
             "user": os.getenv('DB_APP_USER', 'edm_app_user'),
-            "password": os.getenv('DB_APP_PASSWORD', 'EdmApp2024!@#'),
+            "password": db_password,
             "database": os.getenv('DB_NAME', 'edm'),
             "charset": "utf8mb4",
         }

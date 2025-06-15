@@ -15,21 +15,32 @@ COPY attachment.pdf /app/
 # 创建日志和数据目录
 RUN mkdir -p /app/logs /app/data
 
-# 设置环境变量
+# 设置基础环境变量（敏感信息通过docker-compose传入）
 ENV PYTHONUNBUFFERED=1 \
     ENVIRONMENT=production \
     DB_HOST=1Panel-mysql-UHRJ \
     DB_PORT=3306 \
-    DB_NAME=edm \
+    DB_NAME=edm-db \
     DB_READONLY_USER=edm-db \
-    DB_READONLY_PASSWORD=yQQPFaTDGXBFjJWW \
     DB_APP_USER=edm-db \
-    DB_APP_PASSWORD=yQQPFaTDGXBFjJWW
+    GMAIL_USER=info@uforward.jp \
+    GA_TRACKING_ID=UA-172341524-1 \
+    TZ=Asia/Tokyo
 
-# 安装 cron 和设置时区
-RUN apt-get update && apt-get install -y tzdata cron && \
+# 安装系统依赖、中文字体和设置时区
+RUN apt-get update && apt-get install -y \
+    tzdata \
+    cron \
+    fonts-noto-cjk \
+    fonts-wqy-microhei \
+    fonts-liberation \
+    fontconfig && \
+    # 设置时区
     ln -fs /usr/share/zoneinfo/Asia/Tokyo /etc/localtime && \
     dpkg-reconfigure -f noninteractive tzdata && \
+    # 更新字体缓存
+    fc-cache -fv && \
+    # 清理缓存
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
