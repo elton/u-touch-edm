@@ -328,6 +328,50 @@ class EmailReporter:
 
         return prefecture_stats, success_stats
 
+    def get_daily_email_counts(self) -> Dict[str, int]:
+        """获取最近7天每日邮件发送数量统计"""
+        today = datetime.datetime.now().replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        week_start = today - datetime.timedelta(days=Config.WEEK_DAYS)
+
+        # 查询最近7天每日的邮件发送数量
+        query = """
+        SELECT DATE(sent_at) as send_date, COUNT(*) as email_count
+        FROM support_organization_registry
+        WHERE sent_at >= %s AND sent_at < %s
+        GROUP BY DATE(sent_at)
+        ORDER BY send_date
+        """
+
+        try:
+            results = self.execute_query(
+                query, 
+                (week_start, today),
+                "获取最近7天每日邮件发送数量"
+            )
+
+            # 初始化最近7天的数据，默认为0
+            daily_counts = {}
+            for i in range(Config.WEEK_DAYS):
+                date = week_start + datetime.timedelta(days=i)
+                date_str = date.strftime('%m-%d')
+                daily_counts[date_str] = 0
+
+            # 填充实际数据
+            for row in results:
+                send_date = row["send_date"]
+                email_count = row["email_count"]
+                date_str = send_date.strftime('%m-%d')
+                daily_counts[date_str] = email_count
+
+            logging.info(f"成功获取最近7天每日邮件发送数量: {daily_counts}")
+            return daily_counts
+
+        except Exception as e:
+            logging.error(f"获取每日邮件发送数量失败: {e}")
+            return {}
+
     def _create_chart_base64(self, fig) -> str:
         """将matplotlib图表转换为base64编码的PNG"""
         buffer = None
@@ -392,6 +436,50 @@ class EmailReporter:
 
         except Exception as e:
             logging.error(f"生成图表 '{title}' 失败: {e}")
+            return ""
+
+    def create_daily_count_chart(self, daily_counts: Dict[str, int]) -> str:
+        """创建每日邮件发送数量柱状图"""
+        if not daily_counts:
+            logging.warning("每日邮件发送数量数据为空，跳过生成")
+            return ""
+
+        try:
+            fig, ax = plt.subplots(figsize=Config.CHART_FIGURE_SIZE)
+
+            # 按日期排序
+            sorted_dates = sorted(daily_counts.keys())
+            dates = sorted_dates
+            counts = [daily_counts[date] for date in sorted_dates]
+
+            bars = ax.bar(dates, counts, color='#2196F3', alpha=Config.COLORS["chart_alpha"])
+
+            ax.set_title('最近7天每日邮件发送数量', fontsize=14, fontweight="bold")
+            ax.set_xlabel('日期', fontsize=12)
+            ax.set_ylabel('邮件数量', fontsize=12)
+            ax.tick_params(axis='x', rotation=45, labelsize=10)
+
+            # 在柱状图上方显示数值
+            for bar, count in zip(bars, counts):
+                if count > 0:  # 只有数量大于0时才显示数字
+                    ax.text(
+                        bar.get_x() + bar.get_width() / 2,
+                        bar.get_height() + max(counts) * 0.01,
+                        str(count),
+                        ha="center",
+                        va="bottom",
+                        fontsize=10,
+                    )
+
+            # 设置Y轴从0开始
+            ax.set_ylim(bottom=0)
+            
+            plt.tight_layout()
+            logging.info("成功生成每日邮件发送数量柱状图")
+            return self._create_chart_base64(fig)
+
+        except Exception as e:
+            logging.error(f"生成每日邮件发送数量柱状图失败: {e}")
             return ""
 
     def _generate_css_styles(self) -> str:
@@ -536,8 +624,17 @@ class EmailReporter:
                     gap: 30px;
                     margin: 30px 0;
                 }
+                .chart-grid-3 {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr 1fr;
+                    gap: 20px;
+                    margin: 30px 0;
+                }
                 @media (max-width: 768px) {
                     .chart-grid {
+                        grid-template-columns: 1fr;
+                    }
+                    .chart-grid-3 {
                         grid-template-columns: 1fr;
                     }
                 }
@@ -601,12 +698,12 @@ class EmailReporter:
         html += "</div>"
         return html
 
-    def _generate_weekly_stats_section(self, weekly_region_chart: str, weekly_success_chart: str) -> str:
+    def _generate_weekly_stats_section(self, weekly_region_chart: str, weekly_success_chart: str, weekly_daily_count_chart: str) -> str:
         """生成最近7天统计区域"""
         html = """
                     <div class="section">
                         <h2 class="section-title">最近7天统计</h2>
-                        <div class="chart-grid">
+                        <div class="chart-grid-3">
                             <div>
                                 <h3 style="text-align: center; color: #0052cc; margin-bottom: 15px;">地区分布</h3>
         """
@@ -624,6 +721,17 @@ class EmailReporter:
 
         if weekly_success_chart:
             html += f'<img src="{weekly_success_chart}" alt="最近7天成功率" class="chart-image">'
+        else:
+            html += '<p style="text-align: center; color: #666;">无数据</p>'
+
+        html += """
+                            </div>
+                            <div>
+                                <h3 style="text-align: center; color: #0052cc; margin-bottom: 15px;">每日发送数量</h3>
+        """
+
+        if weekly_daily_count_chart:
+            html += f'<img src="{weekly_daily_count_chart}" alt="最近7天每日邮件发送数量" class="chart-image">'
         else:
             html += '<p style="text-align: center; color: #666;">无数据</p>'
 
@@ -790,6 +898,9 @@ class EmailReporter:
         # 获取一周统计数据
         weekly_prefecture_stats, weekly_success_stats = self.get_weekly_stats()
 
+        # 获取最近7天每日邮件发送数量
+        daily_email_counts = self.get_daily_email_counts()
+
         # 获取累计统计数据
         cumulative_prefecture_stats, cumulative_success_stats = (
             self.get_cumulative_stats()
@@ -802,6 +913,7 @@ class EmailReporter:
         weekly_success_chart = self.create_success_rate_chart(
             weekly_success_stats, "最近7天成功率"
         )
+        weekly_daily_count_chart = self.create_daily_count_chart(daily_email_counts)
         cumulative_region_chart = self.create_chart(
             cumulative_prefecture_stats, "累计地区分布", Config.COLORS["secondary"]
         )
@@ -830,7 +942,7 @@ class EmailReporter:
                 <div class="report-body">
                     {self._generate_stats_section(total_sent, success_count, fail_count, success_rate)}
                     {self._generate_yesterday_chart_section(prefecture_stats)}
-                    {self._generate_weekly_stats_section(weekly_region_chart, weekly_success_chart)}
+                    {self._generate_weekly_stats_section(weekly_region_chart, weekly_success_chart, weekly_daily_count_chart)}
                     {self._generate_cumulative_stats_section(cumulative_region_chart, cumulative_success_chart)}
                     {self._generate_details_table(details)}
                     
