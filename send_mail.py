@@ -91,7 +91,7 @@ class EmailSender:
         """从数据库获取未发送邮件的收件人信息
         
         Args:
-            prefecture: 可选的都道府县筛选条件，如果不提供则使用默认的东京和神奈川
+            prefecture: 可选的都道府县筛选条件，如果不提供则获取所有地区
         """
         connection = None
         try:
@@ -99,16 +99,14 @@ class EmailSender:
             cursor = connection.cursor()
 
             # 构建查询条件
-            prefecture_condition = "(prefecture = '東京都' OR prefecture = '神奈川県')"
+            where_conditions = ["email IS NOT NULL", "email != ''", "email LIKE '%@%'", "sent_at IS NULL"]
             if prefecture:
-                prefecture_condition = f"prefecture = '{prefecture}'"
+                where_conditions.append(f"prefecture = '{prefecture}'")
 
             query = f"""
             SELECT organization_name, representative_name, email, id 
             FROM support_organization_registry 
-            WHERE {prefecture_condition}
-            AND email IS NOT NULL AND email != '' AND email LIKE '%@%'
-            AND sent_at IS NULL
+            WHERE {' AND '.join(where_conditions)}
             ORDER BY id
             """
 

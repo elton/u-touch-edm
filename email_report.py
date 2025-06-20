@@ -292,41 +292,40 @@ class EmailReporter:
 
         return prefecture_stats, success_stats
 
-    def get_cumulative_stats(self) -> Tuple[Dict[str, int], Dict[str, Dict[str, int]]]:
-        """获取累计发送统计数据"""
+    def get_cumulative_stats(self) -> Tuple[int, Dict[str, int]]:
+        """获取累计发送统计数据
+        
+        Returns:
+            Tuple[int, Dict[str, int]]: (总累计发送数量, 各地区累计发送数量)
+        """
         # 获取所有发送记录
         query = """
-        SELECT prefecture, sent_at
+        SELECT prefecture, COUNT(*) as count
         FROM support_organization_registry
         WHERE sent_at IS NOT NULL
-        ORDER BY sent_at DESC
+        GROUP BY prefecture
+        ORDER BY count DESC
         """
 
         try:
             results = self.execute_query(query, None, "获取累计发送统计数据")
 
             prefecture_stats = {}
-            success_stats = {}
+            total_count = 0
 
             for row in results:
                 prefecture = row["prefecture"] or "未知"
-
-                # 统计地区分布
-                prefecture_stats[prefecture] = prefecture_stats.get(prefecture, 0) + 1
-
-                # 统计成功率（已发送的都算成功）
-                if prefecture not in success_stats:
-                    success_stats[prefecture] = {"success": 0, "total": 0}
-
-                success_stats[prefecture]["total"] += 1
-                success_stats[prefecture]["success"] += 1
+                count = row["count"]
+                
+                prefecture_stats[prefecture] = count
+                total_count += count
 
         except Exception as e:
             logging.error(f"获取累计统计数据失败: {e}")
             prefecture_stats = {}
-            success_stats = {}
+            total_count = 0
 
-        return prefecture_stats, success_stats
+        return total_count, prefecture_stats
 
     def get_daily_email_counts(self) -> Dict[str, int]:
         """获取最近7天每日邮件发送数量统计"""
@@ -742,34 +741,31 @@ class EmailReporter:
         """
         return html
 
-    def _generate_cumulative_stats_section(self, cumulative_region_chart: str, cumulative_success_chart: str) -> str:
+    def _generate_cumulative_stats_section(self, cumulative_total_count: int, cumulative_region_chart: str) -> str:
         """生成累计统计区域"""
-        html = """
+        html = f"""
                     <div class="section">
                         <h2 class="section-title">累计统计</h2>
-                        <div class="chart-grid">
-                            <div>
-                                <h3 style="text-align: center; color: #0052cc; margin-bottom: 15px;">地区分布</h3>
+                        
+                        <!-- 累计总数 -->
+                        <div style="text-align: center; margin: 20px 0;">
+                            <div class="stat-box total" style="display: inline-block; margin: 0 auto;">
+                                <div class="stat-label">累计发送总数</div>
+                                <div class="stat-value">{cumulative_total_count}</div>
+                            </div>
+                        </div>
+                        
+                        <!-- 地区分布 -->
+                        <div style="text-align: center;">
+                            <h3 style="color: #0052cc; margin-bottom: 15px;">各地区累计发送数量</h3>
         """
 
         if cumulative_region_chart:
             html += f'<img src="{cumulative_region_chart}" alt="累计地区分布" class="chart-image">'
         else:
-            html += '<p style="text-align: center; color: #666;">无数据</p>'
+            html += '<p style="color: #666;">无数据</p>'
 
         html += """
-                            </div>
-                            <div>
-                                <h3 style="text-align: center; color: #0052cc; margin-bottom: 15px;">成功率分布</h3>
-        """
-
-        if cumulative_success_chart:
-            html += f'<img src="{cumulative_success_chart}" alt="累计成功率" class="chart-image">'
-        else:
-            html += '<p style="text-align: center; color: #666;">无数据</p>'
-
-        html += """
-                            </div>
                         </div>
                     </div>
         """
@@ -902,9 +898,7 @@ class EmailReporter:
         daily_email_counts = self.get_daily_email_counts()
 
         # 获取累计统计数据
-        cumulative_prefecture_stats, cumulative_success_stats = (
-            self.get_cumulative_stats()
-        )
+        cumulative_total_count, cumulative_prefecture_stats = self.get_cumulative_stats()
 
         # 生成图表
         weekly_region_chart = self.create_chart(
@@ -916,9 +910,6 @@ class EmailReporter:
         weekly_daily_count_chart = self.create_daily_count_chart(daily_email_counts)
         cumulative_region_chart = self.create_chart(
             cumulative_prefecture_stats, "累计地区分布", Config.COLORS["secondary"]
-        )
-        cumulative_success_chart = self.create_success_rate_chart(
-            cumulative_success_stats, "累计成功率"
         )
 
         # 组装完整HTML报告
@@ -943,7 +934,7 @@ class EmailReporter:
                     {self._generate_stats_section(total_sent, success_count, fail_count, success_rate)}
                     {self._generate_yesterday_chart_section(prefecture_stats)}
                     {self._generate_weekly_stats_section(weekly_region_chart, weekly_success_chart, weekly_daily_count_chart)}
-                    {self._generate_cumulative_stats_section(cumulative_region_chart, cumulative_success_chart)}
+                    {self._generate_cumulative_stats_section(cumulative_total_count, cumulative_region_chart)}
                     {self._generate_details_table(details)}
                     
                     <div class="footer">
