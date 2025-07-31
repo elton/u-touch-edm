@@ -574,7 +574,6 @@ class SupportOrganizationScraper:
             except Exception as e:
                 color_log.error(f"处理机构 {organization_name} 时出错: {e}")
                 failed_count += 1
-                continue
 
         # 最终结果统计
         total = success_count + failed_count

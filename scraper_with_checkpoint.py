@@ -727,6 +727,24 @@ class SupportOrganizationScraper:
                 color_log.error(f"非网络错误，不重试: {e}")
                 raise e
         return None
+    
+    def _estimate_remaining_time(self, completed: int, total: int, elapsed_time: float) -> str:
+        """估算剩余时间"""
+        if completed == 0:
+            return "未知"
+        
+        avg_time_per_item = elapsed_time / completed
+        remaining_items = total - completed
+        remaining_seconds = avg_time_per_item * remaining_items
+        
+        if remaining_seconds < 60:
+            return f"{remaining_seconds:.0f}秒"
+        elif remaining_seconds < 3600:
+            return f"{remaining_seconds/60:.1f}分钟"
+        else:
+            hours = remaining_seconds // 3600
+            minutes = (remaining_seconds % 3600) // 60
+            return f"{hours:.0f}小时{minutes:.0f}分钟"
 
     def find_email_in_element(self, element) -> Optional[str]:
         """在HTML元素中查找email地址"""
@@ -815,11 +833,20 @@ class SupportOrganizationScraper:
         success_count = progress_info.get('success_count', 0)
         failed_count = progress_info.get('failed_count', 0)
         processed_count = 0
+        current_batch_count = 0  # 当前批次计数器
         
-        color_log.info(f"开始处理 {len(organizations)} 条记录 (会话: {session_id})")
+        # 计算总体进度信息
+        already_processed = progress_info.get('processed_records', 0)
+        current_batch_size = len(organizations)
+        
+        color_log.info(f"开始处理 {current_batch_size} 条记录 (会话: {session_id})")
+        color_log.info(f"📊 总体进度: 已完成 {already_processed}/{total_records} ({(already_processed/total_records*100):.1f}%)")
         if resume_from_id > 0:
-            color_log.info(f"已完成: 成功 {success_count}, 失败 {failed_count}")
+            color_log.info(f"📈 累计统计: 成功 {success_count}, 失败 {failed_count}")
 
+        # 记录批次开始时间
+        self._batch_start_time = time.time()
+        
         try:
             for (
                 org_id,
@@ -833,14 +860,21 @@ class SupportOrganizationScraper:
                     break
                 
                 processed_count += 1
+                current_batch_count += 1
+                
+                # 计算当前整体进度
+                current_total_processed = already_processed + current_batch_count
+                overall_progress = (current_total_processed / total_records) * 100
+                batch_progress = (current_batch_count / current_batch_size) * 100
+                
                 color_log.processing(
-                    f"处理机构: ID={org_id}, 登録番号={registration_number}, 名称={organization_name}, 都道府県={prefecture}"
+                    f"🔄 [{current_batch_count}/{current_batch_size}] ({batch_progress:.1f}%) | 总进度: [{current_total_processed}/{total_records}] ({overall_progress:.1f}%) | {organization_name} ({prefecture})"
                 )
 
                 # 检查是否已经有有效的email地址
                 if current_email and current_email.strip():
                     color_log.info(
-                        f"机构 {organization_name} 已有email地址: {current_email}，跳过"
+                        f"⏭️  机构 {organization_name} 已有email地址: {current_email}，跳过"
                     )
                     continue
 
@@ -874,12 +908,16 @@ class SupportOrganizationScraper:
                         failed_count += 1
                         color_log.error(f"更新机构 {organization_name} 的email失败")
 
-                    # 每处理10条记录更新一次进度
-                    if processed_count % 10 == 0:
+                    # 每处理5条记录更新一次进度
+                    if current_batch_count % 5 == 0:
                         self.checkpoint_manager.update_progress(org_id, success_count, failed_count)
-                        total_processed = progress_info.get('processed_records', 0) + processed_count
-                        progress_percent = (total_processed / total_records) * 100
-                        color_log.info(f"进度: {total_processed}/{total_records} ({progress_percent:.1f}%) - 成功: {success_count}, 失败: {failed_count}")
+                        current_total_processed = already_processed + current_batch_count
+                        overall_progress = (current_total_processed / total_records) * 100
+                        success_rate = (success_count / (success_count + failed_count) * 100) if (success_count + failed_count) > 0 else 0
+                        
+                        print(f"\n{Fore.CYAN}📊 进度报告 - 批次: {current_batch_count}/{current_batch_size} | 总体: {current_total_processed}/{total_records} ({overall_progress:.1f}%){Style.RESET_ALL}")
+                        print(f"{Fore.GREEN}   ✅ 成功: {success_count} | {Fore.RED}❌ 失败: {failed_count} | {Fore.YELLOW}📈 成功率: {success_rate:.1f}%{Style.RESET_ALL}")
+                        print(f"{Fore.MAGENTA}   ⏱️  预计剩余: {self._estimate_remaining_time(current_batch_count, current_batch_size, time.time() - getattr(self, '_batch_start_time', time.time()))}{Style.RESET_ALL}\n")
 
                     # 添加随机延迟避免过于频繁的请求
                     delay = random.uniform(0.5, 2.0)
@@ -888,6 +926,7 @@ class SupportOrganizationScraper:
                 except Exception as e:
                     color_log.error(f"处理机构 {organization_name} 时出错: {e}")
                     failed_count += 1
+                    continue
 
         except KeyboardInterrupt:
             color_log.warning("接收到中断信号，正在保存进度...")
@@ -901,13 +940,20 @@ class SupportOrganizationScraper:
         
         # 最终更新进度
         if organizations:
-            last_id = organizations[-1][0] if processed_count == len(organizations) else org_id
+            last_id = organizations[-1][0] if current_batch_count == len(organizations) else org_id
             self.checkpoint_manager.update_progress(last_id, success_count, failed_count)
+            
+            # 显示最终批次统计
+            batch_time = time.time() - self._batch_start_time
+            avg_time_per_record = batch_time / current_batch_count if current_batch_count > 0 else 0
+            color_log.info(f"📋 批次完成统计: 处理 {current_batch_count} 条记录，耗时 {batch_time:.1f} 秒，平均 {avg_time_per_record:.2f} 秒/条")
 
         # 最终结果统计
-        total_this_session = processed_count
+        total_this_session = current_batch_count
         total_overall = success_count + failed_count
         success_rate = (success_count / total_overall * 100) if total_overall > 0 else 0
+        current_total_processed = already_processed + current_batch_count
+        overall_completion = (current_total_processed / total_records) * 100
         
         # 判断是否完成所有记录
         if len(organizations) < 100:  # 如果返回的记录少于预期，可能已经完成
@@ -927,12 +973,14 @@ class SupportOrganizationScraper:
         
         print(f"\n{Fore.WHITE}{Back.GREEN} {status_text} {Style.RESET_ALL}")
         print(f"{Fore.CYAN}📅 会话ID: {session_id}{Style.RESET_ALL}")
-        print(f"{Fore.GREEN}✅ 本次成功: {success_count - progress_info.get('success_count', 0)}{Style.RESET_ALL}")
-        print(f"{Fore.RED}❌ 本次失败: {failed_count - progress_info.get('failed_count', 0)}{Style.RESET_ALL}")
-        print(f"{Fore.CYAN}📊 总体成功率: {success_rate:.1f}% (累计成功: {success_count}){Style.RESET_ALL}")
-        print(f"{Fore.YELLOW}🔄 要继续处理，请使用: python scraper_with_checkpoint.py --resume {session_id}{Style.RESET_ALL}")
+        print(f"{Fore.MAGENTA}📊 总体进度: {current_total_processed}/{total_records} ({overall_completion:.1f}%){Style.RESET_ALL}")
+        print(f"{Fore.GREEN}✅ 本次成功: {success_count - progress_info.get('success_count', 0)} | 累计成功: {success_count}{Style.RESET_ALL}")
+        print(f"{Fore.RED}❌ 本次失败: {failed_count - progress_info.get('failed_count', 0)} | 累计失败: {failed_count}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}📈 总体成功率: {success_rate:.1f}%{Style.RESET_ALL}")
+        if overall_completion < 100:
+            print(f"{Fore.YELLOW}🔄 要继续处理，请使用: python scraper_with_checkpoint.py --resume {session_id}{Style.RESET_ALL}")
         
-        color_log.success(f"处理完成！本次: {total_this_session}条, 累计成功: {success_count}, 失败: {failed_count}, 成功率: {success_rate:.1f}%")
+        color_log.success(f"处理完成！本次: {total_this_session}条, 总进度: {overall_completion:.1f}%, 累计成功: {success_count}, 失败: {failed_count}, 成功率: {success_rate:.1f}%")
 
 
 def main():
