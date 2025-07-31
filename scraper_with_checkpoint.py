@@ -101,6 +101,8 @@ class CheckpointManager:
         self.session_id = None
         self.checkpoint_data = None
         self.interrupted = False
+        self._last_update_time = 0
+        self._update_interval = 1.0  # 最小更新间隔（秒）
         
         # 注册信号处理器，优雅处理中断
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -198,9 +200,23 @@ class CheckpointManager:
                 cursor.close()
                 connection.close()
     
-    def update_progress(self, last_processed_id: int, success_count: int, failed_count: int):
-        """更新进度"""
+    def update_progress(self, last_processed_id: int, success_count: int, failed_count: int, force_update: bool = False):
+        """更新进度（带频率控制）"""
         if not self.session_id or self.interrupted:
+            return
+        
+        current_time = time.time()
+        
+        # 如果不是强制更新，检查是否达到更新间隔
+        if not force_update and (current_time - self._last_update_time) < self._update_interval:
+            # 只更新本地缓存，不写数据库
+            if self.checkpoint_data:
+                self.checkpoint_data.update({
+                    'last_processed_id': last_processed_id,
+                    'processed_records': success_count + failed_count,
+                    'success_count': success_count,
+                    'failed_count': failed_count
+                })
             return
         
         connection = self.get_db_connection()
@@ -220,13 +236,14 @@ class CheckpointManager:
             )
             connection.commit()
             
-            # 更新本地缓存
+            # 更新本地缓存和时间戳
             self.checkpoint_data.update({
                 'last_processed_id': last_processed_id,
                 'processed_records': processed_records,
                 'success_count': success_count,
                 'failed_count': failed_count
             })
+            self._last_update_time = current_time
             
         except pymysql.Error as err:
             color_log.error(f"更新进度错误: {err}")
@@ -876,6 +893,8 @@ class SupportOrganizationScraper:
                     color_log.info(
                         f"⏭️  机构 {organization_name} 已有email地址: {current_email}，跳过"
                     )
+                    # 即使跳过也要更新进度，记录已处理的记录
+                    self.checkpoint_manager.update_progress(org_id, success_count, failed_count, force_update=True)
                     continue
 
                 try:
@@ -884,6 +903,8 @@ class SupportOrganizationScraper:
                     if not detail_url:
                         color_log.warning(f"未找到机构 {organization_name} 的详情页面")
                         failed_count += 1
+                        # 立即保存失败记录的进度
+                        self.checkpoint_manager.update_progress(org_id, success_count, failed_count, force_update=True)
                         continue
 
                     # 从 gai-rou.com 提取email和网站
@@ -897,6 +918,8 @@ class SupportOrganizationScraper:
                     if not email:
                         color_log.error(f"未找到机构 {organization_name} 的email地址")
                         failed_count += 1
+                        # 立即保存失败记录的进度
+                        self.checkpoint_manager.update_progress(org_id, success_count, failed_count, force_update=True)
                         continue
 
                     # 更新数据库
@@ -908,9 +931,13 @@ class SupportOrganizationScraper:
                         failed_count += 1
                         color_log.error(f"更新机构 {organization_name} 的email失败")
 
-                    # 每处理5条记录更新一次进度
+                    # 每处理完一条记录就立即保存进度到数据库
+                    # 使用智能更新：成功时立即更新，其他情况根据频率控制
+                    force_update = (success_count > progress_info.get('success_count', 0))
+                    self.checkpoint_manager.update_progress(org_id, success_count, failed_count, force_update=force_update)
+                    
+                    # 每处理5条记录显示一次详细进度报告
                     if current_batch_count % 5 == 0:
-                        self.checkpoint_manager.update_progress(org_id, success_count, failed_count)
                         current_total_processed = already_processed + current_batch_count
                         overall_progress = (current_total_processed / total_records) * 100
                         success_rate = (success_count / (success_count + failed_count) * 100) if (success_count + failed_count) > 0 else 0
@@ -926,22 +953,25 @@ class SupportOrganizationScraper:
                 except Exception as e:
                     color_log.error(f"处理机构 {organization_name} 时出错: {e}")
                     failed_count += 1
+                    # 即使出错也要保存进度
+                    self.checkpoint_manager.update_progress(org_id, success_count, failed_count, force_update=True)
                     continue
 
         except KeyboardInterrupt:
             color_log.warning("接收到中断信号，正在保存进度...")
-            self.checkpoint_manager.update_progress(org_id, success_count, failed_count)
-            self.checkpoint_manager.update_status('paused', f'用户中断，已处理{processed_count}条记录')
+            # 强制更新进度到数据库
+            self.checkpoint_manager.update_progress(org_id, success_count, failed_count, force_update=True)
+            self.checkpoint_manager.update_status('paused', f'用户中断，已处理{current_batch_count}条记录')
             return
         except Exception as e:
             color_log.error(f"处理过程中发生错误: {e}")
             self.checkpoint_manager.update_status('failed', f'处理错误: {str(e)}')
             return
         
-        # 最终更新进度
+        # 最终更新进度（强制更新）
         if organizations:
             last_id = organizations[-1][0] if current_batch_count == len(organizations) else org_id
-            self.checkpoint_manager.update_progress(last_id, success_count, failed_count)
+            self.checkpoint_manager.update_progress(last_id, success_count, failed_count, force_update=True)
             
             # 显示最终批次统计
             batch_time = time.time() - self._batch_start_time
