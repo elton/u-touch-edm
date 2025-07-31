@@ -6,11 +6,12 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "beautifulsoup4>=4.13.4",
-    "lxml>=5.4.0",
+    "colorama>=0.4.6",
+    "lxml>=6.0.0",
     "matplotlib>=3.10.3",
     "openpyxl>=3.1.5",
-    "pandas>=2.2.3",
+    "pandas>=2.3.1",
     "pymysql>=1.1.1",
     "python-dotenv>=1.1.0",
-    "requests>=2.32.3",
+    "requests>=2.32.4",
 ]
