@@ -315,7 +315,12 @@ class SupportOrganizationScraper:
         
         for match in matches:
             if isinstance(match, tuple):
-                url = match[0] + (match[1] if match[1] else '') + (match[2] if match[2] else '')
+                # 安全地处理tuple，避免index out of range错误
+                url = match[0]  # 主域名部分
+                if len(match) > 1 and match[1]:
+                    url += match[1]  # 端口部分
+                if len(match) > 2 and match[2]:
+                    url += match[2]  # 路径部分
             else:
                 url = match
             

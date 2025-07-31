@@ -608,7 +608,12 @@ class SupportOrganizationScraper:
         
         for match in matches:
             if isinstance(match, tuple):
-                url = match[0] + (match[1] if match[1] else '') + (match[2] if match[2] else '')
+                # 安全地处理tuple，避免index out of range错误
+                url = match[0]  # 主域名部分
+                if len(match) > 1 and match[1]:
+                    url += match[1]  # 端口部分
+                if len(match) > 2 and match[2]:
+                    url += match[2]  # 路径部分
             else:
                 url = match
             
@@ -908,7 +913,11 @@ class SupportOrganizationScraper:
                         continue
 
                     # 从 gai-rou.com 提取email和网站
-                    email, website_url = self.retry_request(self.extract_email_and_website, detail_url)
+                    try:
+                        email, website_url = self.retry_request(self.extract_email_and_website, detail_url)
+                    except Exception as e:
+                        color_log.error(f"提取邮件和网站时出错: {e}")
+                        email, website_url = None, None
                     
                     # 如果在 gai-rou.com 没找到email，尝试从官网抓取
                     if not email and website_url:
